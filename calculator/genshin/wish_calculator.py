@@ -53,6 +53,6 @@ class GenshinWishCalculator:
 
 
 if __name__ == "__main__":
-    cal = GenshinWishCalculator(((0, 0), (0, 0, 0)), [0, 1])
+    cal = GenshinWishCalculator(((0, 0), (0, 0, 0)), [0, 1]) # Use Absorbing Markov
     cal.calculate()
     print(cal.result)
