@@ -55,14 +55,14 @@ class GenshinWishModel:
 
     def get_next_states(self, iter_chance=1.0):
         if len(self.plan) <= 0:
-            return []
+            return [(iter_chance, self)]
         if self.plan[0] == 0:
             if self.state in self.chara_cache:
                 pairs = self.chara_cache[self.state]
                 result = list(map(lambda pair: (pair[0] * iter_chance,
-                                                GenshinWishModel(state=pair[1].get_state(), plan=self.plan[1:])
+                                                GenshinWishModel(state=pair[1], plan=self.plan[1:])
                                                 if pair[2]
-                                                else GenshinWishModel(state=pair[1].get_state(), plan=self.plan)),
+                                                else GenshinWishModel(state=pair[1], plan=self.plan)),
                                   pairs))
                 return result
             get_chance = self.chara[self.state[0][0] + 1]
@@ -77,13 +77,13 @@ class GenshinWishModel:
                                             plan=self.plan)
                 get_nothing = GenshinWishModel(state=((self.state[0][0] + 1, 0), self.state[1]), plan=self.plan)
                 if get_chance >= 1:
-                    self.chara_cache[self.state] = [(get_chance_half, get_chara, True),
-                                                    (get_chance_half, get_pity, False)]
+                    self.chara_cache[self.state] = [(get_chance_half, get_chara.get_state(), True),
+                                                    (get_chance_half, get_pity.get_state(), False)]
                     return [(get_chance_half*iter_chance, get_chara), (get_chance_half*iter_chance, get_pity)]
                 else:
-                    self.chara_cache[self.state] = [(get_chance_half, get_chara, True),
-                                                    (get_chance_half, get_pity, False),
-                                                    (no_get_chance, get_nothing, False)]
+                    self.chara_cache[self.state] = [(get_chance_half, get_chara.get_state(), True),
+                                                    (get_chance_half, get_pity.get_state(), False),
+                                                    (no_get_chance, get_nothing.get_state(), False)]
                     return [(get_chance_half*iter_chance, get_chara), (get_chance_half*iter_chance, get_pity),
                             (no_get_chance*iter_chance, get_nothing)]
             elif self.state[0][1] == 1:
@@ -91,11 +91,11 @@ class GenshinWishModel:
                                              plan=self.plan[1:])
                 get_nothing = GenshinWishModel(state=((self.state[0][0] + 1, 1), self.state[1]), plan=self.plan)
                 if get_chance >= 1:
-                    self.chara_cache[self.state] = [(get_chance, get_chara, True)]
+                    self.chara_cache[self.state] = [(get_chance, get_chara.get_state(), True)]
                     return [(get_chance*iter_chance, get_chara)]
                 else:
-                    self.chara_cache[self.state] = [(get_chance, get_chara, True),
-                                                    (no_get_chance, get_nothing, False)]
+                    self.chara_cache[self.state] = [(get_chance, get_chara.get_state(), True),
+                                                    (no_get_chance, get_nothing.get_state(), False)]
                     return [(get_chance*iter_chance, get_chara), (no_get_chance*iter_chance, get_nothing)]
             else:
                 raise Exception("Unexpected state: " + str(self.state[0]))
@@ -103,9 +103,9 @@ class GenshinWishModel:
             if self.state in self.weapon_cache:
                 pairs = self.weapon_cache[self.state]
                 result = list(map(lambda pair: (pair[0] * iter_chance,
-                                                GenshinWishModel(state=pair[1].get_state(), plan=self.plan[1:])
+                                                GenshinWishModel(state=pair[1], plan=self.plan[1:])
                                                 if pair[2]
-                                                else GenshinWishModel(state=pair[1].get_state(), plan=self.plan)),
+                                                else GenshinWishModel(state=pair[1], plan=self.plan)),
                                   pairs))
                 return result
             get_chance = self.weapon[self.state[1][0] + 1]
@@ -113,49 +113,58 @@ class GenshinWishModel:
                 get_chance = 1
             no_get_chance = 1 - get_chance
             if self.state[1][1] == 0 and self.state[1][2] < 2:
-                get_chance_reduction = 0.375 * get_chance
+                get_up_chance = 0.375 * get_chance
+                get_pity_chance = 0.25 * get_chance
                 get_weapon = GenshinWishModel(state=(self.state[0], (0, 0, 0)), plan=self.plan[1:])
-                get_pity = GenshinWishModel(state=(self.state[0], (0, 1, self.state[1][2] + 1)), plan=self.plan)
-                get_nothing = GenshinWishModel(state=(self.state[0], (self.state[1][0] + 1, 0, self.state[1][2])),
+                get_other_weapon = GenshinWishModel(state=(self.state[0], (0, 0, self.state[1][2]+1)), plan=self.plan)
+                get_pity = GenshinWishModel(state=(self.state[0], (0, 1, self.state[1][2]+1)), plan=self.plan)
+                get_nothing = GenshinWishModel(state=(self.state[0], (self.state[1][0]+1, 0, self.state[1][2])),
                                                plan=self.plan)
                 if get_chance >= 1:
-                    self.weapon_cache[self.state] = [(get_chance_reduction, get_weapon, True),
-                                                     (get_chance_reduction, get_pity, False)]
-                    return [(get_chance_reduction*iter_chance, get_weapon),
-                            (get_chance_reduction*iter_chance, get_pity)]
+                    self.weapon_cache[self.state] = [(get_up_chance, get_weapon.get_state(), True),
+                                                     (get_up_chance, get_other_weapon.get_state(), False),
+                                                     (get_pity_chance, get_pity.get_state(), False)]
+                    return [(get_up_chance*iter_chance, get_weapon),
+                            (get_up_chance*iter_chance, get_other_weapon),
+                            (get_pity_chance*iter_chance, get_pity)]
                 else:
-                    self.weapon_cache[self.state] = [(get_chance_reduction, get_weapon, True),
-                                                     (get_chance_reduction, get_pity, False),
-                                                     (no_get_chance, get_nothing, False)]
-                    return [(get_chance_reduction*iter_chance, get_weapon),
-                            (get_chance_reduction*iter_chance, get_pity),
+                    self.weapon_cache[self.state] = [(get_up_chance, get_weapon.get_state(), True),
+                                                     (get_up_chance, get_other_weapon.get_state(), False),
+                                                     (get_pity_chance, get_pity.get_state(), False),
+                                                     (no_get_chance, get_nothing.get_state(), False)]
+                    return [(get_up_chance*iter_chance, get_weapon),
+                            (get_up_chance*iter_chance, get_other_weapon),
+                            (get_pity_chance*iter_chance, get_pity),
                             (no_get_chance*iter_chance, get_nothing)]
             elif self.state[1][1] == 1 and self.state[1][2] < 2:
-                get_chance_reduction = 0.75 * get_chance
+                get_up_chance = 0.5 * get_chance
                 get_weapon = GenshinWishModel(state=(self.state[0], (0, 0, 0)), plan=self.plan[1:])
-                get_nothing = GenshinWishModel(state=(self.state[0],
-                                                      (self.state[1][0] + 1, 1, self.state[1][2])),
+                get_other_weapon = GenshinWishModel(state=(self.state[0], (0, 0, self.state[1][2]+1)), plan=self.plan)
+                get_nothing = GenshinWishModel(state=(self.state[0], (self.state[1][0] + 1, 1, self.state[1][2])),
                                                plan=self.plan)
                 if get_chance >= 1:
-                    self.weapon_cache[self.state] = [(get_chance_reduction, get_weapon, True)]
-                    return [(get_chance_reduction*iter_chance, get_weapon)]
+                    self.weapon_cache[self.state] = [(get_up_chance, get_weapon.get_state(), True),
+                                                     (get_up_chance, get_other_weapon.get_state(), False)]
+                    return [(get_up_chance*iter_chance, get_weapon), (get_up_chance*iter_chance, get_other_weapon)]
                 else:
-                    self.weapon_cache[self.state] = [(get_chance_reduction, get_weapon, True),
-                                                     (no_get_chance, get_nothing, False)]
-                    return [(get_chance_reduction*iter_chance, get_weapon), (no_get_chance*iter_chance, get_nothing)]
+                    self.weapon_cache[self.state] = [(get_up_chance, get_weapon.get_state(), True),
+                                                     (get_up_chance, get_other_weapon.get_state(), False),
+                                                     (no_get_chance, get_nothing.get_state(), False)]
+                    return [(get_up_chance*iter_chance, get_weapon),
+                            (get_up_chance * iter_chance, get_other_weapon),
+                            (no_get_chance*iter_chance, get_nothing)]
             elif self.state[1][2] >= 2:
-                get_chance_reduction = 0.35 * get_chance
                 get_weapon = GenshinWishModel(state=(self.state[0], (0, 0, 0)), plan=self.plan[1:])
                 get_nothing = GenshinWishModel(state=(self.state[0],
                                                       (self.state[1][0] + 1, self.state[1][1], self.state[1][2])),
                                                plan=self.plan)
                 if get_chance >= 1:
-                    self.weapon_cache[self.state] = [(get_chance_reduction, get_weapon, True)]
-                    return [(get_chance_reduction*iter_chance, get_weapon)]
+                    self.weapon_cache[self.state] = [(get_chance, get_weapon.get_state(), True)]
+                    return [(get_chance*iter_chance, get_weapon)]
                 else:
-                    self.weapon_cache[self.state] = [(get_chance_reduction, get_weapon, True),
-                                                     (no_get_chance, get_nothing, False)]
-                    return [(get_chance_reduction*iter_chance, get_weapon), (no_get_chance*iter_chance, get_nothing)]
+                    self.weapon_cache[self.state] = [(get_chance, get_weapon.get_state(), True),
+                                                     (no_get_chance, get_nothing.get_state(), False)]
+                    return [(get_chance*iter_chance, get_weapon), (no_get_chance*iter_chance, get_nothing)]
             else:
                 raise Exception("Unexpected state: " + str(self.state[1]))
         else:
@@ -163,6 +172,8 @@ class GenshinWishModel:
 
 
 if __name__ == "__main__":
-    model = GenshinWishModel(state=((88, 0), (7, 0, 0)), plan=[1])
-    print(model.get_state())
-    print(model.get_next_states(iter_chance=0.5))
+    model = GenshinWishModel(state=((0, 0), (0, 0, 0)), plan=[1])
+    l0 = model.get_next_states()
+    l1 = l0[0][1].get_next_states()
+    l2 = l0[1][1].get_next_states()
+    l3 = l0[2][1].get_next_states()

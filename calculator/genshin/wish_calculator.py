@@ -15,8 +15,12 @@ class GenshinWishCalculator:
         self.curr_iter = {self.model: 1.0}
         self.win_chance = [0] * len(plan)
         self.result = [self.win_chance]
-
-        self.iter_limit = 240 * len(plan)
+        self.iter_limit = 0
+        for banner_type in plan:
+            if banner_type == 0:
+                self.iter_limit += 180
+            elif banner_type == 1:
+                self.iter_limit += 231
         self.accumulator_lock = threading.Lock()
 
     def __process_model(self, model, chance):
@@ -49,6 +53,6 @@ class GenshinWishCalculator:
 
 
 if __name__ == "__main__":
-    cal = GenshinWishCalculator(((0, 0), (0, 0, 0)), [0, 0, 0, 0, 0, 0, 0])
+    cal = GenshinWishCalculator(((0, 0), (0, 0, 0)), [0, 1])
     cal.calculate()
     print(cal.result)
