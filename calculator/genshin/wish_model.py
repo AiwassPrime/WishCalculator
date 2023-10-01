@@ -41,6 +41,9 @@ class GenshinWishModel:
         details = str((self.state, len(self.plan)))
         return details
 
+    def left_n_plan(self, n):
+        return GenshinWishModel(plan=self.plan[:n])
+
     def del_last_plan(self):
         return GenshinWishModel(plan=self.plan[:-1])
 

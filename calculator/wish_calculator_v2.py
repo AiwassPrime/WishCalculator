@@ -92,12 +92,41 @@ class WishCalculatorV2:
     def get_mc(self):
         return self.mc
 
+    def get_one_predict_from_state(self, start_state, target_state, steps):
+        result = [0] * len(self.plan)
+        for i in range(len(self.plan)):
+            start_state_copy = copy.deepcopy(start_state)
+            start_state_copy = start_state_copy.left_n_plan(i + 1)
+            start_index = self.mc_index_dict[i][start_state_copy]
+            target_index = self.mc_index_dict[i][target_state]
+            transition_mat = self.mc[i].to_matrix()
+            transition_mat_power = np.linalg.matrix_power(transition_mat, steps)
+            result[i] = transition_mat_power[start_index][target_index]
+        return result
+
+    def get_all_predict_from_state(self, start_state, target_state, max_steps):
+        result_all = []
+        inter_matrix = {key: None for key in range(len(self.plan))}
+        inter_start_state = {key: None for key in range(len(self.plan))}
+        for i in range(len(self.plan)):
+            start_state_copy = copy.deepcopy(start_state)
+            inter_start_state[i] = start_state_copy.left_n_plan(i + 1)
+        for step in range(max_steps):
+            result = [0] * len(self.plan)
+            for i in range(len(self.plan)):
+                start_index = self.mc_index_dict[i][inter_start_state[i]]
+                target_index = self.mc_index_dict[i][target_state]
+                if inter_matrix[i] is None:
+                    inter_matrix[i] = self.mc[i].to_matrix()
+                else:
+                    inter_matrix[i] = self.mc[i].to_matrix() @ inter_matrix[i]
+                result[i] = inter_matrix[i][start_index][target_index]
+            result_all.append(result)
+        return result_all
+
 
 if __name__ == "__main__":
-    cal = WishCalculatorV2(model.GenshinWishModel(plan=[0, 0, 0, 0, 0, 0, 0, 1]), force_calculate=True)
-    tar_index = cal.mc_index_dict[1][model.GenshinWishModel()]
-    mc = cal.get_mc()[1]
-    transition_matrix = mc.to_matrix()
-    transition_matrix_n_steps = np.linalg.matrix_power(transition_matrix, 220)
-    probability = transition_matrix_n_steps[0][tar_index]
-    print(probability)
+    cal = WishCalculatorV2(model.GenshinWishModel(plan=[0, 0, 0, 0, 0, 0, 0, 1]), force_calculate=False)
+    ret = cal.get_all_predict_from_state(model.GenshinWishModel(plan=[0, 0, 0, 0, 0, 0, 0, 1]), model.GenshinWishModel(), 1000)
+
+    print(ret)
