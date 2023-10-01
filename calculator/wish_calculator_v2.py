@@ -94,11 +94,10 @@ class WishCalculatorV2:
 
 
 if __name__ == "__main__":
-    cal = WishCalculatorV2(model.GenshinWishModel(plan=[0, 1]), force_calculate=True)
-    index = cal.mc_index_dict[0][model.GenshinWishModel()]
-    distri = np.zeros(len(cal.mc_index_dict[0]), dtype=float)
-    distri[index] = 1.0
+    cal = WishCalculatorV2(model.GenshinWishModel(plan=[0]), force_calculate=False)
+    tar_index = cal.mc_index_dict[0][model.GenshinWishModel()]
     mc = cal.get_mc()[0]
-    print(mc)
-    ret = mc.expected_transitions(1)
-    print(ret)
+    transition_matrix = mc.to_matrix()
+    transition_matrix_n_steps = np.linalg.matrix_power(transition_matrix, 160)
+    probability = transition_matrix_n_steps[0][tar_index]
+    print(probability)
