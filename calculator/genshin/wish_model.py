@@ -41,11 +41,18 @@ class GenshinWishModel:
         details = str((self.state, len(self.plan)))
         return details
 
+    def del_last_plan(self):
+        return GenshinWishModel(plan=self.plan[:-1])
+
     def get_state(self):
         return self.state
 
     def get_plan(self):
         return self.plan
+
+    def get_model_name(self):
+        binary_string = ''.join(str(num) for num in self.plan)
+        return "genshin_" + str(hash(self.state)) + "_" + binary_string
 
     def is_win(self, fulfillment=0):
         if len(self.plan) <= fulfillment:
