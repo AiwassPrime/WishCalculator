@@ -41,6 +41,9 @@ class GenshinWishModel:
         details = str((self.state, len(self.plan)))
         return details
 
+    def get_empty_model(self):
+        return GenshinWishModel()
+
     def left_n_plan(self, n):
         return GenshinWishModel(plan=self.plan[:n])
 

@@ -6,6 +6,7 @@ import time
 import numpy as np
 from matplotlib import pyplot
 from pydtmc import MarkovChain, plot_sequence
+import scipy.sparse as sp
 
 import genshin.wish_model as model
 import concurrent.futures
@@ -23,6 +24,8 @@ class WishCalculatorV2:
         self.mc_index_list = {key: [] for key in range(len(self.plan))}
         self.states_list = {key: {} for key in range(len(self.plan))}
 
+        self.result = None
+
         self.curr_wish_model = None
         self.curr_plan = None
         self.bfs_set = set()
@@ -30,15 +33,27 @@ class WishCalculatorV2:
 
         model_file_path = './models/' + self.__gen_model_file_name()
         dict_file_path = './models/' + self.__gen_dict_file_name()
+        result_file_path = './models/' + self.__gen_result_file_name()
         if force_calculate:
             self._build_calculator()
-        elif os.path.exists(model_file_path):
+        elif os.path.exists(model_file_path) and os.path.exists(dict_file_path) and os.path.exists(result_file_path):
             with open(model_file_path, 'rb') as f:
                 self.mc = pickle.load(f)
             with open(dict_file_path, 'rb') as f:
                 self.mc_index_dict = pickle.load(f)
+            with open(result_file_path, 'rb') as f:
+                self.result = pickle.load(f)
         else:
             self._build_calculator()
+
+    def __gen_model_file_name(self):
+        return self.wish_model.get_model_name() + '_model.pkl'
+
+    def __gen_dict_file_name(self):
+        return self.wish_model.get_model_name() + '_dict.pkl'
+
+    def __gen_result_file_name(self):
+        return self.wish_model.get_model_name() + '_result.pkl'
 
     def __process_model(self, curr_state):
         next_states = curr_state.get_next_states()
@@ -64,15 +79,7 @@ class WishCalculatorV2:
             self.curr_wish_model = self.curr_wish_model.del_last_plan()
             self.curr_plan = self.curr_wish_model.get_plan()
 
-    def __gen_model_file_name(self):
-        return self.wish_model.get_model_name() + '.pkl'
-
-    def __gen_dict_file_name(self):
-        return self.wish_model.get_model_name() + '_dict.pkl'
-
-    def _build_calculator(self):
-        start_time = time.time()
-        self.__build_adj_list()
+    def __build_model(self):
         for i in range(len(self.plan)):
             self.mc_metrix[i] = np.zeros((len(self.states_list[i]), len(self.states_list[i])), dtype=float)
             self.mc_index_list[i] = self.states_list[i].keys()
@@ -83,11 +90,51 @@ class WishCalculatorV2:
                     next_index = self.mc_index_dict[i][next_state_pair[1]]
                     self.mc_metrix[i][curr_index, next_index] = next_state_pair[0]
             self.mc[i] = MarkovChain(self.mc_metrix[i], list(str(item) for item in self.states_list[i].keys()))
+
+    def __build_all_predict_to_target(self, target_state):
+        result_all = []
+        inter_matrix = {key: None for key in range(len(self.plan))}
+        first_matrix = {key: None for key in range(len(self.plan))}
+        for i in range(len(self.plan)):
+            combined_array = None
+            target_index = self.mc_index_dict[i][target_state]
+            max_steps = 0
+            for banner_type in self.plan[:i + 1]:
+                if banner_type == 0:
+                    max_steps += 180
+                elif banner_type == 1:
+                    max_steps += 231
+            for step in range(max_steps):
+                if inter_matrix[i] is None:
+                    coo_matrix = sp.coo_matrix(self.mc[i].to_matrix())
+                    inter_matrix[i] = coo_matrix
+                    first_matrix[i] = coo_matrix
+                    combined_array = coo_matrix.toarray()[:, target_index]
+                else:
+                    inter_matrix[i] = first_matrix[i].dot(inter_matrix[i])
+                    combined_array = np.vstack((combined_array, inter_matrix[i].toarray()[:, target_index]))
+            result_all.append(combined_array.T)
+        self.result = result_all
+
+    def _build_calculator(self):
+        start_time = time.time()
+        self.__build_adj_list()
+        time_adj = time.time()
+        print("Build adjacent list " + self.wish_model.get_model_name() + " in " + str(time_adj - start_time) + " second(s)")
+        self.__build_model()
+        time_model = time.time()
+        print("Build model " + self.wish_model.get_model_name() + " in " + str(time_model - time_adj) + " second(s)")
+        self.__build_all_predict_to_target(self.wish_model.get_empty_model())
+        time_result = time.time()
+        print("Build result " + self.wish_model.get_model_name() + " in " + str(time_result - time_model) + " second(s)")
+
         with open('./models/' + self.__gen_model_file_name(), 'wb') as f:
             pickle.dump(self.mc, f)
         with open('./models/' + self.__gen_dict_file_name(), 'wb') as f:
             pickle.dump(self.mc_index_dict, f)
-        print("Build model " + self.__gen_model_file_name() + " in " + str(time.time() - start_time) + " second(s)")
+        with open('./models/' + self.__gen_result_file_name(), 'wb') as f:
+            pickle.dump(self.result, f)
+        print("Build calculator " + self.wish_model.get_model_name() + " in " + str(time.time() - start_time) + " second(s)")
 
     def get_mc(self):
         return self.mc
@@ -107,6 +154,7 @@ class WishCalculatorV2:
     def get_all_predict_from_state(self, start_state, target_state, max_steps):
         result_all = []
         inter_matrix = {key: None for key in range(len(self.plan))}
+        first_matrix = {key: None for key in range(len(self.plan))}
         inter_start_state = {key: None for key in range(len(self.plan))}
         for i in range(len(self.plan)):
             start_state_copy = copy.deepcopy(start_state)
@@ -117,16 +165,18 @@ class WishCalculatorV2:
                 start_index = self.mc_index_dict[i][inter_start_state[i]]
                 target_index = self.mc_index_dict[i][target_state]
                 if inter_matrix[i] is None:
-                    inter_matrix[i] = self.mc[i].to_matrix()
+                    coo_matrix = sp.coo_matrix(self.mc[i].to_matrix())
+                    inter_matrix[i] = coo_matrix
+                    first_matrix[i] = coo_matrix
                 else:
-                    inter_matrix[i] = self.mc[i].to_matrix() @ inter_matrix[i]
-                result[i] = inter_matrix[i][start_index][target_index]
+                    inter_matrix[i] = first_matrix[i].dot(inter_matrix[i])
+                result[i] = inter_matrix[i].toarray()[start_index][target_index]
             result_all.append(result)
         return result_all
 
 
 if __name__ == "__main__":
     cal = WishCalculatorV2(model.GenshinWishModel(plan=[0, 0, 0, 0, 0, 0, 0, 1]), force_calculate=False)
-    ret = cal.get_all_predict_from_state(model.GenshinWishModel(plan=[0, 0, 0, 0, 0, 0, 0, 1]), model.GenshinWishModel(), 1000)
-
-    print(ret)
+    index = cal.mc_index_dict[0][model.GenshinWishModel(plan=[0])]
+    print(index)
+    print(cal.result[0][index])
