@@ -3,12 +3,20 @@ import os
 import time
 from typing import Dict
 
-model_file_path = '../models/genshin_v2.pkl'
+from calculator.definitions import ROOT_DIR
+
+model_file_path = os.path.join(ROOT_DIR, 'models/genshin_v2.pkl')
 
 
 class GenshinWishModelState(tuple[tuple[int, int], tuple[int, int, int], list[int]]):
     def __str__(self):
         return str((self[0], self[1], ''.join(map(str, self[2]))))
+
+    def __hash__(self):
+        return hash((self[0], self[1], len(self[2])))
+
+    def __eq__(self, other):
+        return hash(self) == hash(other)
 
 
 def is_cache_exist():
@@ -184,10 +192,14 @@ class GenshinWishModelV2:
         if len(curr_state[2]) <= 0:
             return [(1.0, curr_state, True)]
         if curr_state[2][0] == 0:
+            if len(self.chara_cache[curr_state[0]]) <= 0:
+                raise Exception("Unexpected state: " + str(curr_state))
             return [(chance, GenshinWishModelState(
                 (chara_state, curr_state[1], (curr_state[2][1:] if is_want else curr_state[2]))), False) for
                     chance, chara_state, is_want in self.chara_cache[curr_state[0]]]
         else:
+            if len(self.weapon_cache[curr_state[1]]) <= 0:
+                raise Exception("Unexpected state: " + str(curr_state))
             return [(chance, GenshinWishModelState(
                 (curr_state[0], weapon_state, (curr_state[2][1:] if is_want else curr_state[2]))), False) for
                     chance, weapon_state, is_want in self.weapon_cache[curr_state[1]]]
