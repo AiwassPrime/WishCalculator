@@ -44,7 +44,7 @@ class GenshinWishModelState(tuple[tuple[int, int], tuple[int, int, int], list[in
             curr_target = plan[0]
             plan = plan[1:]
 
-        return result_list
+        return result_list[-1]
 
 
 def is_cache_exist():
@@ -111,7 +111,7 @@ class GenshinWishModelV2:
         bfs_set = set()
         while len(bfs_queue) > 0:
             curr_process = bfs_queue.pop()
-            if self.chara[curr_process[0]] >= 1:
+            if self.chara[curr_process[0] + 1] >= 1:
                 if curr_process[1] >= 1:
                     chara_cache.setdefault(curr_process, []).append((1.0, (0, 0), True))  # get want
                 else:
@@ -123,19 +123,19 @@ class GenshinWishModelV2:
             else:
                 if curr_process[1] >= 1:
                     chara_cache.setdefault(curr_process, []).append(
-                        (self.chara[curr_process[0]], (0, 0), True))  # get want
+                        (self.chara[curr_process[0] + 1], (0, 0), True))  # get want
                     chara_cache.setdefault(curr_process, []).append((
-                        1.0 - self.chara[curr_process[0]], (curr_process[0] + 1, 1), False))  # get nothing
+                        1.0 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, 1), False))  # get nothing
                     if (curr_process[0] + 1, 1) not in bfs_set:
                         bfs_set.add((curr_process[0] + 1, 1))
                         bfs_queue.append((curr_process[0] + 1, 1))
                 else:
                     chara_cache.setdefault(curr_process, []).append(
-                        (self.chara[curr_process[0]] * 0.5, (0, 0), True))  # get want
+                        (self.chara[curr_process[0] + 1] * 0.5, (0, 0), True))  # get want
                     chara_cache.setdefault(curr_process, []).append(
-                        (self.chara[curr_process[0]] * 0.5, (0, 1), False))  # get pity
+                        (self.chara[curr_process[0] + 1] * 0.5, (0, 1), False))  # get pity
                     chara_cache.setdefault(curr_process, []).append((
-                        1.0 - self.chara[curr_process[0]], (curr_process[0] + 1, 0), False))  # get nothing
+                        1.0 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, 0), False))  # get nothing
                     if (0, 1) not in bfs_set:
                         bfs_set.add((0, 1))
                         bfs_queue.append((0, 1))
@@ -149,7 +149,7 @@ class GenshinWishModelV2:
         bfs_set = set()
         while len(bfs_queue) > 0:
             curr_process = bfs_queue.pop()
-            if self.weapon[curr_process[0]] >= 1:
+            if self.weapon[curr_process[0] + 1] >= 1:
                 if curr_process[2] >= 2:
                     weapon_cache.setdefault(curr_process, []).append((1.0, (0, 0, 0), True))  # get want
                 elif curr_process[1] >= 1:
@@ -174,20 +174,20 @@ class GenshinWishModelV2:
             else:
                 if curr_process[2] >= 2:
                     weapon_cache.setdefault(curr_process, []).append(
-                        (self.weapon[curr_process[0]], (0, 0, 0), True))  # get want
+                        (self.weapon[curr_process[0] + 1], (0, 0, 0), True))  # get want
                     weapon_cache.setdefault(curr_process, []).append((
-                        1 - self.weapon[curr_process[0]], (curr_process[0] + 1, curr_process[1], 2),
+                        1 - self.weapon[curr_process[0] + 1], (curr_process[0] + 1, curr_process[1], 2),
                         False))  # get nothing
                     if (curr_process[0] + 1, curr_process[1], 2) not in bfs_set:
                         bfs_set.add((curr_process[0] + 1, curr_process[1], 2))
                         bfs_queue.append((curr_process[0] + 1, curr_process[1], 2))
                 elif curr_process[1] >= 1:
                     weapon_cache.setdefault(curr_process, []).append(
-                        (self.weapon[curr_process[0]] * 0.5, (0, 0, 0), True))  # get want
+                        (self.weapon[curr_process[0] + 1] * 0.5, (0, 0, 0), True))  # get want
                     weapon_cache.setdefault(curr_process, []).append((
-                        self.weapon[curr_process[0]] * 0.5, (0, 0, curr_process[2] + 1), False))  # get other
+                        self.weapon[curr_process[0] + 1] * 0.5, (0, 0, curr_process[2] + 1), False))  # get other
                     weapon_cache.setdefault(curr_process, []).append((
-                        1.0 - self.weapon[curr_process[0]], (curr_process[0] + 1, 1, curr_process[2]),
+                        1.0 - self.weapon[curr_process[0] + 1], (curr_process[0] + 1, 1, curr_process[2]),
                         False))  # get nothing
                     if (0, 0, curr_process[2] + 1) not in bfs_set:
                         bfs_set.add((0, 0, curr_process[2] + 1))
@@ -197,13 +197,13 @@ class GenshinWishModelV2:
                         bfs_queue.append((curr_process[0] + 1, 1, curr_process[2]))
                 else:
                     weapon_cache.setdefault(curr_process, []).append(
-                        (self.weapon[curr_process[0]] * 0.375, (0, 0, 0), True))  # get want
+                        (self.weapon[curr_process[0] + 1] * 0.375, (0, 0, 0), True))  # get want
                     weapon_cache.setdefault(curr_process, []).append((
-                        self.weapon[curr_process[0]] * 0.375, (0, 0, curr_process[2] + 1), False))  # get other
+                        self.weapon[curr_process[0] + 1] * 0.375, (0, 0, curr_process[2] + 1), False))  # get other
                     weapon_cache.setdefault(curr_process, []).append((
-                        self.weapon[curr_process[0]] * 0.25, (0, 1, curr_process[2] + 1), False))  # get pity
+                        self.weapon[curr_process[0] + 1] * 0.25, (0, 1, curr_process[2] + 1), False))  # get pity
                     weapon_cache.setdefault(curr_process, []).append((
-                        1.0 - self.weapon[curr_process[0]], (curr_process[0] + 1, 0, curr_process[2]),
+                        1.0 - self.weapon[curr_process[0] + 1], (curr_process[0] + 1, 0, curr_process[2]),
                         False))  # get nothing
                     if (0, 0, curr_process[2] + 1) not in bfs_set:
                         bfs_set.add((0, 0, curr_process[2] + 1))
