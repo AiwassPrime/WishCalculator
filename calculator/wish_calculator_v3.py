@@ -1,21 +1,51 @@
+import os
+import pickle
 import time
 
 import numpy as np
 import scipy.sparse as sp
 
 import genshin.wish_model_v2 as model
+from calculator.definitions import ROOT_DIR
 
 
 class WishCalculatorV3:
-    def __init__(self, wish_model, init_state):
+    def __init__(self, wish_model, init_state, force=False):
         self.model = wish_model
         self.init_state = init_state
+        self.model_file_path = os.path.join(ROOT_DIR, 'models/genshin_v2_{}.pkl'.format(self.init_state.gen_base64()))
 
         self.adjacency_list = {}
         self.adjacency_matrix = None
         self.adjacency_matrix_index = {}
+        self.combined_array = None
 
-        self.__build_model()
+        if force:
+            self.__build_model()
+            self.__save_cache()
+        else:
+            if self.__is_cache_exist():
+                self.__load_cache()
+            else:
+                self.__build_model()
+                self.__save_cache()
+
+    def __is_cache_exist(self):
+        if os.path.exists(self.model_file_path):
+            return True
+        return False
+
+    def __save_cache(self):
+        model_file_path = os.path.join(ROOT_DIR, 'models/genshin_v2_{}.pkl'.format(hash(self.init_state)))
+        save = {"index": self.adjacency_matrix_index, "result": self.combined_array}
+        with open(self.model_file_path, 'wb') as f:
+            pickle.dump(save, f)
+
+    def __load_cache(self):
+        with open(self.model_file_path, 'rb') as f:
+            load = pickle.load(f)
+        self.adjacency_matrix_index = load["index"]
+        self.combined_array = load["result"]
 
     def __build_model(self):
         start_time = time.time()
@@ -40,24 +70,31 @@ class WishCalculatorV3:
         inter_matrix = None
         first_matrix = self.adjacency_matrix
 
-        combined_array = None
-        target_index = self.adjacency_matrix_index[model.GenshinWishModelState(((0, 0), (0, 0, 0), []))]
+        combined_array = {key: None for key in range(len(self.init_state.get_goal_state()))}
+        target_indexes = [self.adjacency_matrix_index[goal_state] for goal_state in self.init_state.get_goal_state()]
         max_steps = 0
-        for banner_type in [0, 0, 0, 0, 0, 0, 0, 1]:
+        for banner_type in self.init_state[2]:
             if banner_type == 0:
                 max_steps += 180
             elif banner_type == 1:
                 max_steps += 231
+
+        coo_matrix = sp.coo_matrix(self.adjacency_matrix)
         for step in range(max_steps):
+            print("step: " + str(step))
             if inter_matrix is None:
-                coo_matrix = sp.coo_matrix(self.adjacency_matrix)
                 inter_matrix = coo_matrix
                 first_matrix = coo_matrix
-                combined_array = coo_matrix.toarray()[:, target_index]
+                target_arrays = inter_matrix.toarray()[:, target_indexes]
+                combined_array = {key: target_arrays[:, idx] for idx, (key, index) in enumerate(combined_array.items())}
             else:
                 inter_matrix = first_matrix.dot(inter_matrix)
-                combined_array = np.vstack((combined_array, inter_matrix.toarray()[:, target_index]))
-        print("Build adjacency matrix in " + str(time.time() - start_time) + " second(s)")
+                target_arrays = inter_matrix.toarray()[:, target_indexes]
+                combined_array = {key: np.vstack((value, target_arrays[:, idx])) for idx, (key, value) in
+                                  enumerate(combined_array.items())}
+
+        self.combined_array = combined_array
+        print("Build model in " + str(time.time() - start_time) + " second(s)")
 
 
 if __name__ == "__main__":

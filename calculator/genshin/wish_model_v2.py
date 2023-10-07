@@ -1,7 +1,9 @@
+import base64
+import copy
+import hashlib
 import pickle
 import os
 import time
-from typing import Dict
 
 from calculator.definitions import ROOT_DIR
 
@@ -18,32 +20,37 @@ class GenshinWishModelState(tuple[tuple[int, int], tuple[int, int, int], list[in
     def __eq__(self, other):
         return hash(self) == hash(other)
 
+    def gen_base64(self):
+        hash_object = hashlib.sha256(str(self).encode())
+        hash_value = hash_object.hexdigest()
+        return hash_value
+
+    def get_goal_state(self):
+        if len(self[2]) <= 0:
+            return []
+        result_list = []
+        curr_target = self[2][0]
+        plan = self[2][1:]
+        curr_state = copy.deepcopy(self)
+        while len(plan) >= 0:
+            if curr_target == 0:
+                curr_state = GenshinWishModelState(((0, 0), curr_state[1], plan))
+                result_list.append(curr_state)
+            else:
+                curr_state = GenshinWishModelState((curr_state[0], (0, 0, 0), plan))
+                result_list.append(curr_state)
+            if len(plan) == 0:
+                break
+            curr_target = plan[0]
+            plan = plan[1:]
+
+        return result_list
+
 
 def is_cache_exist():
     if os.path.exists(model_file_path):
         return True
     return False
-
-
-def get_goal_states(curr_state: GenshinWishModelState) -> list[GenshinWishModelState]:
-    if len(curr_state[2]) <= 0:
-        return []
-    result_list = []
-    curr_target = curr_state[2][0]
-    plan = curr_state[2][1:]
-    while len(plan) >= 0:
-        if curr_target == 0:
-            curr_state = GenshinWishModelState(((0, 0), curr_state[1], plan))
-            result_list.append(curr_state)
-        else:
-            curr_state = GenshinWishModelState((curr_state[0], (0, 0, 0), plan))
-            result_list.append(curr_state)
-        if len(plan) == 0:
-            break
-        curr_target = plan[0]
-        plan = plan[1:]
-
-    return result_list
 
 
 class GenshinWishModelV2:
@@ -228,4 +235,4 @@ class GenshinWishModelV2:
 
 if __name__ == "__main__":
     model = GenshinWishModelV2()
-    print(get_goal_states(GenshinWishModelState(((74, 0), (1, 0, 0), [0, 0, 0]))))
+    print(GenshinWishModelState(((74, 0), (1, 0, 0), [0, 0, 0, 1])).get_goal_state())
