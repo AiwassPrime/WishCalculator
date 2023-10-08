@@ -134,22 +134,42 @@ class GenshinUser:
         logging.info("Set state for user {}: {}".format(self.uid, self.state))
         return True
 
-    def update_state_one_pull(self, result: consts.GenshinPullResultType) -> bool:
-        next_states = self.model.get_next_states(self.state)
-        update_state = None
-        for next_state in next_states:
-            if result is next_state[3]:
-                update_state = next_state[1]
-                break
-        if update_state is None:
-            return False
-        self.state = update_state
-        return True
+    def update_state_one_pull(self, banner: consts.GenshinBannerType, pull: consts.GenshinPullResultType) -> bool:
+        if banner.value == self.state[2][0]:
+            next_states = self.model.get_next_states(self.state)
+            update_state = None
+            for next_state in next_states:
+                if pull == next_state[3]:
+                    update_state = next_state[1]
+                    break
+            if update_state is None:
+                return False
+            self.state = update_state
+            return True
+        elif banner.value in self.state[2]:
+            index = self.state[2].index(banner.value)
 
-    def update_state_n_pull(self, result_list: list[consts.GenshinPullResultType]) -> bool:
+            old_plan = self.state[2][:index]
+            new_plan = self.state[2][index:]
+            new_state = model.GenshinWishModelState((self.state[0], self.state[1], new_plan))
+
+            next_states = self.model.get_next_states(new_state)
+            update_state = None
+            for next_state in next_states:
+                if pull == next_state[3]:
+                    update_state = next_state[1]
+                    break
+            if update_state is None:
+                return False
+            self.state = model.GenshinWishModelState((update_state[0], update_state[1], old_plan + update_state[2]))
+            return True
+        else:
+            return True
+
+    def update_state_n_pull(self, banner: consts.GenshinBannerType, pull_list: list[consts.GenshinPullResultType]) -> bool:
         original_state = copy.deepcopy(self.state)
-        for result in result_list:
-            is_success = self.update_state_one_pull(result)
+        for result in pull_list:
+            is_success = self.update_state_one_pull(banner, result)
             if not is_success:
                 self.state = original_state
                 return False
