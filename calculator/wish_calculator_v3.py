@@ -1,18 +1,19 @@
 import copy
+import logging
 import os
 import pickle
 import time
 
+import cupy as cp
 import numpy as np
 import scipy.sparse as sp
-from numpy.linalg import matrix_power
 
 import genshin.wish_model_v2 as model
 from calculator.definitions import ROOT_DIR
 
 
 class WishCalculatorV3:
-    def __init__(self, wish_model, init_state, force=False):
+    def __init__(self, wish_model, init_state, force=False, force_cpu=False):
         self.model = wish_model
         self.init_state = init_state
         self.model_file_path = os.path.join(ROOT_DIR, 'models/genshin_v2_{}.pkl'.format(self.init_state.gen_base64()))
@@ -20,15 +21,16 @@ class WishCalculatorV3:
         self.adjacency_list = {}
         self.adjacency_matrix = None
         self.adjacency_matrix_index = {}
+        self.result = None
 
         if force:
-            self.__build_model()
+            self.__build_model(force_cpu=force_cpu)
             self.__save_cache()
         else:
             if self.__is_cache_exist():
                 self.__load_cache()
             else:
-                self.__build_model()
+                self.__build_model(force_cpu=force_cpu)
                 self.__save_cache()
 
     def __is_cache_exist(self):
@@ -38,7 +40,7 @@ class WishCalculatorV3:
 
     def __save_cache(self):
         model_file_path = os.path.join(ROOT_DIR, 'models/genshin_v2_{}.pkl'.format(hash(self.init_state)))
-        save = {"index": self.adjacency_matrix_index, "matrix": self.adjacency_matrix}
+        save = {"index": self.adjacency_matrix_index, "matrix": self.adjacency_matrix, "result": self.result}
         with open(self.model_file_path, 'wb') as f:
             pickle.dump(save, f)
 
@@ -47,8 +49,9 @@ class WishCalculatorV3:
             load = pickle.load(f)
         self.adjacency_matrix_index = load["index"]
         self.adjacency_matrix = load["matrix"]
+        self.result = load["result"]
 
-    def __build_model(self):
+    def __build_model(self, force_cpu=False):
         start_time = time.time()
         dfs_set = set()
         dfs_set.add(self.init_state)
@@ -70,10 +73,6 @@ class WishCalculatorV3:
                     self.adjacency_matrix_index[curr_state], self.adjacency_matrix_index[next_state_tuple[1]]] = \
                     next_state_tuple[0]
 
-        print("Build model in " + str(time.time() - start_time) + " second(s)")
-
-    def get_result(self):
-        start_time = time.time()
         max_steps = 0
         for banner_type in self.init_state[2]:
             if banner_type == 0:
@@ -81,30 +80,54 @@ class WishCalculatorV3:
             elif banner_type == 1:
                 max_steps += 231
 
-        result = np.zeros(max_steps, dtype=float)
-        start_index = self.adjacency_matrix_index[self.init_state]
-        target_index = self.adjacency_matrix_index[self.init_state.get_goal_state()]
+        target_index = self.adjacency_matrix_index[self.init_state.get_goal_state()[-1]]
 
-        coo_matrix = sp.coo_matrix(self.adjacency_matrix)
-        inter_matrix = None
-        first_matrix = copy.deepcopy(coo_matrix)
-        for step in range(max_steps):
-            if inter_matrix is None:
-                inter_matrix = coo_matrix
-                target_arrays = inter_matrix.toarray()[start_index, target_index]
-                result[step] = target_arrays
-            else:
-                inter_matrix = first_matrix.dot(inter_matrix)
-                target_arrays = inter_matrix.toarray()[start_index, target_index]
-                result[step] = target_arrays
+        if cp.cuda.runtime.getDeviceCount() == 0 or force_cpu:
+            logging.info("Use CPU")
+            result = np.zeros((len(self.adjacency_matrix_index), max_steps), dtype=float)
+            coo_matrix = sp.coo_matrix(self.adjacency_matrix)
+            inter_matrix = None
+            first_matrix = copy.deepcopy(coo_matrix)
+            for step in range(max_steps):
+                logging.debug("Step " + str(step))
+                if inter_matrix is None:
+                    inter_matrix = coo_matrix
+                    target_arrays = inter_matrix.toarray()[:, target_index]
+                    result[:, step] = target_arrays
+                else:
+                    inter_matrix = first_matrix.dot(inter_matrix)
+                    target_arrays = inter_matrix.toarray()[:, target_index]
+                    result[:, step] = target_arrays
+        else:
+            logging.info("Use GPU")
+            result = cp.zeros((len(self.adjacency_matrix_index), max_steps), dtype=float)
+            inter_matrix = cp.sparse.csr_matrix(cp.asarray(self.adjacency_matrix))
+            first_matrix = copy.deepcopy(inter_matrix)
+            for step in range(max_steps):
+                logging.debug("Step " + str(step))
+                if step == 0:
+                    target_arrays = inter_matrix.toarray()[:, target_index]
+                else:
+                    inter_matrix = first_matrix.dot(inter_matrix)
+                    target_arrays = inter_matrix.toarray()[:, target_index]
+                result[:, step] = target_arrays
+            result = cp.asnumpy(result)
 
-        print("Calculate result in " + str(time.time() - start_time) + " second(s)")
-        return result
+        self.result = result
+
+        logging.info("Build model in " + str(time.time() - start_time) + " second(s)")
+
+    def get_result(self, start_state):
+        if start_state not in self.adjacency_matrix_index:
+            return None, False
+        else:
+            return self.result[self.adjacency_matrix_index[start_state]], True
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     g_wish_model = model.GenshinWishModelV2()
-    g_state = model.GenshinWishModelState(((0, 0), (1, 0, 0), [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]))
-    cal = WishCalculatorV3(g_wish_model, g_state)
-    res = cal.get_result()
+    g_state = model.GenshinWishModelState(((0, 0), (0, 0, 0), [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]))
+    cal = WishCalculatorV3(g_wish_model, g_state, force=True)
+    res = cal.get_result(model.GenshinWishModelState(((0, 0), (0, 0, 0), [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1])))
     print(res)
