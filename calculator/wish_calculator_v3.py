@@ -8,7 +8,6 @@ import cupy as cp
 import numpy as np
 import scipy.sparse as sp
 
-import genshin.wish_model_v2 as model
 from calculator.definitions import ROOT_DIR
 
 
@@ -126,8 +125,3 @@ class WishCalculatorV3:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    g_wish_model = model.GenshinWishModelV2()
-    g_state = model.GenshinWishModelState(((0, 0), (0, 0, 0), [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]))
-    cal = WishCalculatorV3(g_wish_model, g_state, force=True)
-    res = cal.get_result(model.GenshinWishModelState(((0, 0), (0, 0, 0), [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1])))
-    print(res)

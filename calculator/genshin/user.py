@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import wish_model_v2 as model
 from calculator.genshin import consts
+from calculator.wish_calculator_v3 import WishCalculatorV3
 
 
 @dataclass
@@ -135,6 +136,21 @@ class GenshinUser:
         return True
 
     def update_state_one_pull(self, banner: consts.GenshinBannerType, pull: consts.GenshinPullResultType) -> bool:
+        if self.resource.intertwined_fate > 0:
+            self.resource.intertwined_fate -= 1
+        elif 0 < self.resource.primogem < 160:
+            if self.resource.genesis_crystal >= (160 - self.resource.primogem):
+                self.resource.genesis_crystal -= (160 - self.resource.primogem)
+                self.resource.primogem = 0
+            else:
+                return False
+        elif self.resource.primogem >= 160:
+            self.resource.primogem -= 160
+        elif self.resource.genesis_crystal >= 160:
+            self.resource.genesis_crystal -= 160
+        else:
+            return False
+
         if banner.value == self.state[2][0]:
             next_states = self.model.get_next_states(self.state)
             update_state = None
@@ -176,11 +192,34 @@ class GenshinUser:
         return True
 
     def trigger_calculator(self):
-        pass
+        state_list = self.state.get_reduced_state()
+        for state in state_list:
+            self.calculator[state] = WishCalculatorV3(self.model, state)
+
+    def get_raw_result(self):
+        no_regenerate = True
+        goal_states = self.state.get_reduced_state()[::-1]
+        result_list = {}
+        keys_list = list(self.calculator.keys())[::-1]
+        for index, key in enumerate(keys_list, start=0):
+            if index >= len(goal_states):
+                break
+            result, have_result = self.calculator[key].get_result(goal_states[index])
+            if have_result:
+                no_regenerate = False
+                result_list[goal_states[index]] = result
+        return result_list, no_regenerate
 
     
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     user = GenshinUser(1)
-    user.update_resource(consts.GenshinResourceAction.ADJUST_STAR, 100)
-    print(user.get_resource())
+    user.update_resource(consts.GenshinResourceAction.ADJUST_FATE, 500)
+    user.set_state(0, consts.GenshinCharaPityType.CHARA_50, 0, consts.GenshinWeaponPityType.WEAPON_50_PATH_0,
+                   [consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA,
+                    consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA,
+                    consts.GenshinBannerType.CHARA, consts.GenshinBannerType.WEAPON])
+    user.trigger_calculator()
+    raw, is_success = user.get_raw_result()
+
+    print(raw)

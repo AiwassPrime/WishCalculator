@@ -27,6 +27,14 @@ class GenshinWishModelState(tuple[tuple[int, int], tuple[int, int, int], list[in
         hash_value = hash_object.hexdigest()
         return hash_value
 
+    def get_reduced_state(self):
+        if len(self[2]) <= 0:
+            return []
+        result_list = []
+        for i in range(1, len(self[2]) + 1):
+            result_list.append(GenshinWishModelState((self[0], self[1], self[2][:i])))
+        return result_list
+
     def get_goal_state(self):
         if len(self[2]) <= 0:
             return []
