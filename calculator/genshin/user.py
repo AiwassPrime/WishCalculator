@@ -2,8 +2,12 @@ import copy
 import logging
 from dataclasses import dataclass
 
+import numpy as np
+from matplotlib import pyplot as plt
+
 import wish_model_v2 as model
 from calculator.genshin import consts
+import matplotlib.colors as mcolors
 from calculator.wish_calculator_v3 import WishCalculatorV3
 
 
@@ -210,7 +214,42 @@ class GenshinUser:
                 result_list[goal_states[index]] = result
         return result_list, no_regenerate
 
-    
+
+def process_result(result):
+    row = 0
+    column = 0
+    for state, res in result.items():
+        row += 1
+        if len(res) > column:
+            column = len(res)
+    grid = [[1 for _ in range(column)] for _ in range(row)]
+    for index_x, stats in enumerate(result.values()):
+        for index_y, stat in enumerate(stats):
+            grid[index_x][index_y] = stat
+    return result, grid, (row, column)
+
+
+def process_result_agg(result):
+    agg_result = {}
+    row = 0
+    column = 0
+    for state, res in result.items():
+        row += 1
+        if len(res) > column:
+            column = len(res)
+        index_10 = np.searchsorted(res, "0.1", side='right')
+        index_25 = np.searchsorted(res, "0.25", side='right')
+        index_50 = np.searchsorted(res, "0.5", side='right')
+        index_75 = np.searchsorted(res, "0.75", side='right')
+        index_90 = np.searchsorted(res, "0.9", side='right')
+        agg_result[state] = [index_10, index_25, index_50, index_75, index_90]
+    grid = [[0 for _ in range(column)] for _ in range(row)]
+    for index, agg_stats in enumerate(agg_result.values()):
+        for stats in agg_stats:
+            grid[index][stats] = 1
+    return agg_result, grid, (row, column)
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     user = GenshinUser(1)
@@ -221,5 +260,25 @@ if __name__ == "__main__":
                     consts.GenshinBannerType.CHARA, consts.GenshinBannerType.WEAPON])
     user.trigger_calculator()
     raw, is_success = user.get_raw_result()
+    agg, graph, dem = process_result(raw)
 
-    print(raw)
+    cmap = plt.cm.RdYlGn
+    norm = mcolors.Normalize(vmin=0, vmax=1)
+
+    aspect_ratio = dem[0] / dem[1]
+    plt.figure(figsize=(aspect_ratio, 1))
+    plt.imshow(graph, cmap=cmap, interpolation='none', aspect='auto', norm=norm)
+
+    plt.fill_betweenx(y=[-0.5, 7.5], x1=500, x2=500, color='blue')
+
+    cbar = plt.colorbar()
+    cbar.set_label('Values')
+
+    x_indices = np.arange(0, dem[1], 50)
+    x_labels = [str(index) for index in x_indices]
+    plt.xticks(ticks=x_indices, labels=x_labels)
+    plt.yticks([])
+
+    plt.text(500, -0.8, 'You', color='blue', fontsize=12, ha='center', va='center')
+
+    plt.show()
