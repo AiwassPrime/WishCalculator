@@ -20,14 +20,22 @@ class GenshinResource:
 
 
 class GenshinUser:
-    def __init__(self, uid):
+    def __init__(self, uid, state=None, resource=None, prev=None):
         self.uid = uid
 
-        self.state = model.GenshinWishModelState(((0, 0), (0, 0, 0), []))
-        self.resource = GenshinResource(0, 0, 0, 0)
+        if state is None:
+            self.state = model.GenshinWishModelState(((0, 0), (0, 0, 0), []))
+        else:
+            self.state = state
+        if resource is None:
+            self.resource = GenshinResource(0, 0, 0, 0)
+        else:
+            self.resource = resource
 
         self.model = model.GenshinWishModelV2()
         self.calculator = {}
+
+        self.prev = prev
 
     def get_resource(self):
         logging.info("Get resources for user {}: {}".format(self.uid, self.resource))
@@ -139,21 +147,22 @@ class GenshinUser:
         logging.info("Set state for user {}: {}".format(self.uid, self.state))
         return True
 
-    def update_state_one_pull(self, banner: consts.GenshinBannerType, pull: consts.GenshinPullResultType) -> bool:
+    def update_state_one_pull(self, banner: consts.GenshinBannerType, pull: consts.GenshinPullResultType):
+        update_resource = copy.deepcopy(self.resource)
         if self.resource.intertwined_fate > 0:
-            self.resource.intertwined_fate -= 1
+            update_resource.intertwined_fate -= 1
         elif 0 < self.resource.primogem < 160:
             if self.resource.genesis_crystal >= (160 - self.resource.primogem):
-                self.resource.genesis_crystal -= (160 - self.resource.primogem)
-                self.resource.primogem = 0
+                update_resource.genesis_crystal -= (160 - self.resource.primogem)
+                update_resource.primogem = 0
             else:
-                return False
+                return self, False
         elif self.resource.primogem >= 160:
-            self.resource.primogem -= 160
+            update_resource.primogem -= 160
         elif self.resource.genesis_crystal >= 160:
-            self.resource.genesis_crystal -= 160
+            update_resource.genesis_crystal -= 160
         else:
-            return False
+            return self, False
 
         if banner.value == self.state[2][0]:
             next_states = self.model.get_next_states(self.state)
@@ -163,9 +172,9 @@ class GenshinUser:
                     update_state = next_state[1]
                     break
             if update_state is None:
-                return False
-            self.state = update_state
-            return True
+                return self, False
+            new_user = GenshinUser(self.uid, state=update_state, resource=update_resource, prev=self)
+            return new_user, True
         elif banner.value in self.state[2]:
             index = self.state[2].index(banner.value)
 
@@ -180,23 +189,23 @@ class GenshinUser:
                     update_state = next_state[1]
                     break
             if update_state is None:
-                return False
-            self.state = model.GenshinWishModelState((update_state[0], update_state[1], old_plan + update_state[2]))
-            return True
+                return self, False
+
+            new_user = GenshinUser(self.uid, state=model.GenshinWishModelState(
+                (update_state[0], update_state[1], old_plan + update_state[2])), resource=update_resource, prev=self)
+            return new_user, True
         else:
-            return True
+            new_user = GenshinUser(self.uid, state=self.state, resource=update_resource, prev=self)
+            return new_user, True
 
     def update_state_n_pull(self, banner: consts.GenshinBannerType,
-                            pull_list: list[consts.GenshinPullResultType]) -> bool:
-        original_state = copy.deepcopy(self.state)
-        original_resource = copy.deepcopy(self.resource)
+                            pull_list: list[consts.GenshinPullResultType]):
+        new_self = copy.deepcopy(self)
         for result in pull_list:
-            is_success = self.update_state_one_pull(banner, result)
+            new_self, is_success = new_self.update_state_one_pull(banner, result)
             if not is_success:
-                self.state = original_state
-                self.resource = original_resource
-                return False
-        return True
+                return self, False
+        return new_self, True
 
     def trigger_calculator(self):
         state_list = self.state.get_reduced_state()
@@ -204,8 +213,10 @@ class GenshinUser:
             self.calculator[state] = WishCalculatorV3(self.model, state)
 
     def get_total_pull(self):
-        return self.resource.intertwined_fate + self.resource.primogem // 160 + self.resource.genesis_crystal // 160 \
+        pull_strict = self.resource.intertwined_fate + self.resource.primogem // 160 + self.resource.genesis_crystal // 160 \
             + self.resource.starglitter // 5
+
+        return pull_strict, pull_strict // 25 * 26
 
     def get_raw_result(self):
         no_regenerate = True
@@ -229,14 +240,15 @@ def process_result(result):
         row += 1
         if len(res) > column:
             column = len(res)
-    grid = [[1 for _ in range(column)] for _ in range(row)]
+    grid = [[1 for _ in range(column + 1)] for _ in range(row)]
     for index_x, stats in enumerate(result.values()):
+        grid[index_x][0] = 0.0
         for index_y, stat in enumerate(stats):
-            grid[index_x][index_y] = stat
+            grid[index_x][index_y + 1] = stat
     return result, grid, (row, column)
 
 
-def process_result_agg(result):
+def process_result_agg(result, agg_list):
     agg_result = {}
     row = 0
     column = 0
@@ -244,17 +256,19 @@ def process_result_agg(result):
         row += 1
         if len(res) > column:
             column = len(res)
-        index_10 = np.searchsorted(res, "0.1", side='right')
-        index_25 = np.searchsorted(res, "0.25", side='right')
-        index_50 = np.searchsorted(res, "0.5", side='right')
-        index_75 = np.searchsorted(res, "0.75", side='right')
-        index_90 = np.searchsorted(res, "0.9", side='right')
-        agg_result[state] = [index_10, index_25, index_50, index_75, index_90]
-    grid = [[0 for _ in range(column)] for _ in range(row)]
+        agg_res = []
+        for agg_num in agg_list:
+            agg_res.append(np.searchsorted(res, agg_num, side='right'))
+        agg_result[state] = agg_res
+    grid = [[0 for _ in range(column + 1)] for _ in range(row)]
     for index, agg_stats in enumerate(agg_result.values()):
         for stats in agg_stats:
-            grid[index][stats] = 1
+            grid[index][stats + 1] = 1
     return agg_result, grid, (row, column)
+
+
+def init_genshin_user(user_name, passcode):
+    return GenshinUser(hash(user_name))
 
 
 if __name__ == "__main__":
@@ -266,7 +280,7 @@ if __name__ == "__main__":
     user.update_resource(consts.GenshinResourceAction.ADJUST_GEM, 62216)
     user.update_resource(consts.GenshinResourceAction.ADJUST_CRYSTAL, 38588)
     user.update_resource(consts.GenshinResourceAction.ADJUST_STAR, 78)
-    pull = user.get_total_pull()
+    pull, pull_est = user.get_total_pull()
 
     user.set_state(8, consts.GenshinCharaPityType.CHARA_100, 1, consts.GenshinWeaponPityType.WEAPON_50_PATH_0,
                    [consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA,
@@ -277,7 +291,7 @@ if __name__ == "__main__":
 
     raw, is_success = user.get_raw_result()
     _, graph, dem = process_result(raw)
-    agg, _, _ = process_result_agg(raw)
+    agg, _, _ = process_result_agg(raw, [0.1, 0.25, 0.5, 0.75, 0.9])
 
     cmap = plt.cm.RdYlGn
     norm = mcolors.Normalize(vmin=0, vmax=1)
@@ -287,9 +301,10 @@ if __name__ == "__main__":
     plt.imshow(graph, cmap=cmap, interpolation='none', aspect='auto', norm=norm)
 
     plt.fill_betweenx(y=[-0.5, 7.5], x1=pull, x2=pull, color='blue')
+    plt.fill_betweenx(y=[-0.5, 7.5], x1=pull_est, x2=pull_est, color='blue', alpha=0.2)
     for index, agg_stats in enumerate(agg.values()):
         for stats in agg_stats:
-            plt.fill_betweenx(y=[index-0.5, index+0.5], x1=stats, x2=stats, color='black')
+            plt.fill_betweenx(y=[index - 0.50, index + 0.49], x1=stats, x2=stats, color='black')
 
     cbar = plt.colorbar()
     cbar.set_label('Values')
