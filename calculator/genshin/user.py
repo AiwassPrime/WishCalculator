@@ -294,7 +294,7 @@ if __name__ == "__main__":
     cbar = plt.colorbar()
     cbar.set_label('Values')
 
-    x_indices = np.arange(0, dem[1], 50)
+    x_indices = np.arange(0, dem[1], 100)
     x_labels = [str(index) for index in x_indices]
     y_indices = np.arange(0, dem[0], 1)
     y_labels = [agg_s.get_plan_str() for agg_s in agg.keys()]
