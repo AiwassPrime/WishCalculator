@@ -186,12 +186,15 @@ class GenshinUser:
         else:
             return True
 
-    def update_state_n_pull(self, banner: consts.GenshinBannerType, pull_list: list[consts.GenshinPullResultType]) -> bool:
+    def update_state_n_pull(self, banner: consts.GenshinBannerType,
+                            pull_list: list[consts.GenshinPullResultType]) -> bool:
         original_state = copy.deepcopy(self.state)
+        original_resource = copy.deepcopy(self.resource)
         for result in pull_list:
             is_success = self.update_state_one_pull(banner, result)
             if not is_success:
                 self.state = original_state
+                self.resource = original_resource
                 return False
         return True
 
@@ -199,6 +202,10 @@ class GenshinUser:
         state_list = self.state.get_reduced_state()
         for state in state_list:
             self.calculator[state] = WishCalculatorV3(self.model, state)
+
+    def get_total_pull(self):
+        return self.resource.intertwined_fate + self.resource.primogem // 160 + self.resource.genesis_crystal // 160 \
+            + self.resource.starglitter // 5
 
     def get_raw_result(self):
         no_regenerate = True
@@ -252,15 +259,25 @@ def process_result_agg(result):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+
     user = GenshinUser(1)
-    user.update_resource(consts.GenshinResourceAction.ADJUST_FATE, 500)
-    user.set_state(0, consts.GenshinCharaPityType.CHARA_50, 0, consts.GenshinWeaponPityType.WEAPON_50_PATH_0,
+
+    user.update_resource(consts.GenshinResourceAction.ADJUST_FATE, 47)
+    user.update_resource(consts.GenshinResourceAction.ADJUST_GEM, 62216)
+    user.update_resource(consts.GenshinResourceAction.ADJUST_CRYSTAL, 38588)
+    user.update_resource(consts.GenshinResourceAction.ADJUST_STAR, 78)
+    pull = user.get_total_pull()
+
+    user.set_state(8, consts.GenshinCharaPityType.CHARA_100, 1, consts.GenshinWeaponPityType.WEAPON_50_PATH_0,
                    [consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA,
                     consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA,
                     consts.GenshinBannerType.CHARA, consts.GenshinBannerType.WEAPON])
+
     user.trigger_calculator()
+
     raw, is_success = user.get_raw_result()
-    agg, graph, dem = process_result(raw)
+    _, graph, dem = process_result(raw)
+    agg, _, _ = process_result_agg(raw)
 
     cmap = plt.cm.RdYlGn
     norm = mcolors.Normalize(vmin=0, vmax=1)
@@ -269,16 +286,21 @@ if __name__ == "__main__":
     plt.figure(figsize=(aspect_ratio, 1))
     plt.imshow(graph, cmap=cmap, interpolation='none', aspect='auto', norm=norm)
 
-    plt.fill_betweenx(y=[-0.5, 7.5], x1=500, x2=500, color='blue')
+    plt.fill_betweenx(y=[-0.5, 7.5], x1=pull, x2=pull, color='blue')
+    for index, agg_stats in enumerate(agg.values()):
+        for stats in agg_stats:
+            plt.fill_betweenx(y=[index-0.5, index+0.5], x1=stats, x2=stats, color='black')
 
     cbar = plt.colorbar()
     cbar.set_label('Values')
 
     x_indices = np.arange(0, dem[1], 50)
     x_labels = [str(index) for index in x_indices]
+    y_indices = np.arange(0, dem[0], 1)
+    y_labels = [agg_s.get_plan_str() for agg_s in agg.keys()]
     plt.xticks(ticks=x_indices, labels=x_labels)
-    plt.yticks([])
+    plt.yticks(ticks=y_indices, labels=y_labels)
 
-    plt.text(500, -0.8, 'You', color='blue', fontsize=12, ha='center', va='center')
+    plt.text(pull, -0.8, 'You={}'.format(pull), color='blue', fontsize=12, ha='center', va='center')
 
     plt.show()

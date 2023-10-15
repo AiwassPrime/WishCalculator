@@ -56,6 +56,36 @@ class GenshinWishModelState(tuple[tuple[int, int], tuple[int, int, int], list[in
 
         return result_list
 
+    def get_plan_str(self):
+        plan = self[2]
+        if len(plan) == 0:
+            return ""
+        plan_0 = -1
+        plan_1 = 0
+        result_plan = []
+        curr_type = plan[0]
+        pull_type = plan[0]
+        for pull_type in plan:
+            if pull_type == 0:
+                plan_0 += 1
+                if curr_type != pull_type:
+                    result_plan.append("R{}".format(plan_1))
+                    curr_type = pull_type
+            elif pull_type == 1:
+                plan_1 += 1
+                if curr_type != pull_type:
+                    result_plan.append("C{}".format(plan_0))
+                    curr_type = pull_type
+            else:
+                raise Exception("Unknown banner type")
+        if pull_type == 0:
+            result_plan.append("C{}".format(plan_0))
+        elif pull_type == 1:
+            result_plan.append("R{}".format(plan_1))
+        else:
+            raise Exception("Unknown banner type")
+        return "-".join(result_plan)
+
 
 def is_cache_exist():
     if os.path.exists(model_file_path):
@@ -245,7 +275,8 @@ class GenshinWishModelV2:
                         bfs_queue.append((curr_process[0] + 1, 0, curr_process[2]))
         self.weapon_cache = weapon_cache
 
-    def get_next_states(self, curr_state: GenshinWishModelState) -> list[tuple[float, GenshinWishModelState, bool, consts.GenshinPullResultType]]:
+    def get_next_states(self, curr_state: GenshinWishModelState) -> list[
+        tuple[float, GenshinWishModelState, bool, consts.GenshinPullResultType]]:
         if len(curr_state[2]) <= 0:
             return [(1.0, curr_state, True, consts.GenshinPullResultType.TERMINAL_STATE)]
         if curr_state[2][0] == 0:
@@ -265,5 +296,7 @@ class GenshinWishModelV2:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     model = GenshinWishModelV2(force=True)
-    res = model.get_next_states(GenshinWishModelState(((74, 0), (1, 0, 0), [0, 0, 0, 0, 0, 0, 1])))
-    print(res)
+    state = GenshinWishModelState(((74, 0), (1, 0, 0), [0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1]))
+    res = model.get_next_states(state)
+    plan_s = state.get_plan_str()
+    print(plan_s)
