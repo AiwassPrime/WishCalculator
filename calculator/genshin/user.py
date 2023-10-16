@@ -216,7 +216,7 @@ class GenshinUser:
         pull_strict = self.resource.intertwined_fate + self.resource.primogem // 160 + self.resource.genesis_crystal // 160 \
             + self.resource.starglitter // 5
 
-        return pull_strict, pull_strict // 25 * 26
+        return pull_strict, pull_strict / 25 * 26
 
     def get_raw_result(self):
         no_regenerate = True
@@ -287,6 +287,15 @@ if __name__ == "__main__":
                     consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA,
                     consts.GenshinBannerType.CHARA, consts.GenshinBannerType.WEAPON])
 
+    # user.update_resource(consts.GenshinResourceAction.ADJUST_FATE, 95)
+    # user.update_resource(consts.GenshinResourceAction.ADJUST_GEM, 23000)
+    # user.update_resource(consts.GenshinResourceAction.ADJUST_CRYSTAL, 0)
+    # user.update_resource(consts.GenshinResourceAction.ADJUST_STAR, 0)
+    # pull, pull_est = user.get_total_pull()
+    #
+    # user.set_state(7, consts.GenshinCharaPityType.CHARA_50, 0, consts.GenshinWeaponPityType.WEAPON_50_PATH_0,
+    #                [consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA])
+
     user.trigger_calculator()
 
     raw, is_success = user.get_raw_result()
@@ -300,8 +309,8 @@ if __name__ == "__main__":
     plt.figure(figsize=(aspect_ratio, 1))
     plt.imshow(graph, cmap=cmap, interpolation='none', aspect='auto', norm=norm)
 
-    plt.fill_betweenx(y=[-0.5, 7.5], x1=pull, x2=pull, color='blue')
-    plt.fill_betweenx(y=[-0.5, 7.5], x1=pull_est, x2=pull_est, color='blue', alpha=0.2)
+    plt.fill_betweenx(y=[-0.5, len(agg) - 0.5], x1=pull, x2=pull, color='blue')
+    plt.fill_betweenx(y=[-0.5, len(agg) - 0.5], x1=pull_est, x2=pull_est, color='blue', alpha=0.2)
     for index, agg_stats in enumerate(agg.values()):
         for stats in agg_stats:
             plt.fill_betweenx(y=[index - 0.50, index + 0.49], x1=stats, x2=stats, color='black')
