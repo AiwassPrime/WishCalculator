@@ -1,12 +1,10 @@
 import copy
-import logging
+from loguru import logger
 import os
 import pickle
 import time
-
 import numpy as np
 import scipy.sparse as sp
-
 from calculator.definitions import ROOT_DIR
 
 
@@ -85,13 +83,13 @@ class WishCalculatorV3:
         except ImportError:
             force_cpu = True
         if force_cpu or cp.cuda.runtime.getDeviceCount() == 0:
-            logging.info("Use CPU")
+            logger.info("Use CPU")
             result = np.zeros((len(self.adjacency_matrix_index), max_steps), dtype=float)
             coo_matrix = sp.coo_matrix(self.adjacency_matrix)
             inter_matrix = None
             first_matrix = copy.deepcopy(coo_matrix)
             for step in range(max_steps):
-                logging.debug("Step " + str(step))
+                logger.debug("Step " + str(step))
                 if inter_matrix is None:
                     inter_matrix = coo_matrix
                     target_arrays = inter_matrix.toarray()[:, target_index]
@@ -101,12 +99,12 @@ class WishCalculatorV3:
                     target_arrays = inter_matrix.toarray()[:, target_index]
                     result[:, step] = target_arrays
         else:
-            logging.info("Use GPU")
+            logger.info("Use GPU")
             result = cp.zeros((len(self.adjacency_matrix_index), max_steps), dtype=float)
             inter_matrix = cp.sparse.csr_matrix(cp.asarray(self.adjacency_matrix))
             first_matrix = copy.deepcopy(inter_matrix)
             for step in range(max_steps):
-                logging.debug("Step " + str(step))
+                logger.debug("Step " + str(step))
                 if step == 0:
                     target_arrays = inter_matrix.toarray()[:, target_index]
                 else:
@@ -117,7 +115,7 @@ class WishCalculatorV3:
 
         self.result = result
 
-        logging.info("Build model in " + str(time.time() - start_time) + " second(s)")
+        logger.info("Build model in " + str(time.time() - start_time) + " second(s)")
 
     def get_result(self, start_state):
         if start_state not in self.adjacency_matrix_index:
@@ -127,4 +125,4 @@ class WishCalculatorV3:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    pass

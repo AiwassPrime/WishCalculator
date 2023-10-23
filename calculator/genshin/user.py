@@ -1,5 +1,5 @@
 import copy
-import logging
+from loguru import logger
 from dataclasses import dataclass
 
 import numpy as np
@@ -40,12 +40,12 @@ class GenshinUser:
         self.prev = prev
 
     def get_resource(self):
-        logging.info("Get resources for user {}: {}".format(self.uid, self.resource))
+        logger.info("Get resources for user {}: {}".format(self.uid, self.resource))
         return self.resource
 
     def set_resource(self, intertwined_fate, genesis_crystal, primogem, starglitter):
         self.resource = GenshinResource(intertwined_fate, genesis_crystal, primogem, starglitter)
-        logging.info("Set resources for user {}: {}".format(self.uid, self.resource))
+        logger.info("Set resources for user {}: {}".format(self.uid, self.resource))
 
     def __adjust_fate(self, amount: int):
         self.resource.intertwined_fate = amount
@@ -88,7 +88,7 @@ class GenshinUser:
             return True
 
     def update_resource(self, action: consts.GenshinResourceAction, amount: int) -> bool:
-        logging.info("Try to update resources for user {}: {}".format(self.uid, self.resource))
+        logger.info("Try to update resources for user {}: {}".format(self.uid, self.resource))
         action_dict = {
             consts.GenshinResourceAction.ADJUST_FATE: self.__adjust_fate,
             consts.GenshinResourceAction.ADJUST_CRYSTAL: self.__adjust_crystal,
@@ -102,26 +102,26 @@ class GenshinUser:
         if selected_action is not None:
             is_success = selected_action(amount)
             if is_success:
-                logging.info("Updated resources for user {}: {}".format(self.uid, self.resource))
+                logger.info("Updated resources for user {}: {}".format(self.uid, self.resource))
             else:
-                logging.warning(
+                logger.warning(
                     "Cannot updated resources for user {} with GenshinResourceAction{}: {}".format(self.uid, action,
                                                                                                    self.resource))
             return is_success
         else:
-            logging.error(
+            logger.error(
                 "Update resources for user {} error: invalid GenshinResourceAction {}".format(self.uid, action))
             return False
 
     def get_state(self):
-        logging.info("Get state for user {}: {}".format(self.uid, self.state))
+        logger.info("Get state for user {}: {}".format(self.uid, self.state))
         return self.state
 
     def set_state(self, chara_pulls: int, chara_pity: consts.GenshinCharaPityType, weapon_pulls: int,
                   weapon_pity: consts.GenshinWeaponPityType, plan: list[consts.GenshinBannerType]) -> bool:
-        logging.info("Try to set state for user {}: {}".format(self.uid, self.state))
+        logger.info("Try to set state for user {}: {}".format(self.uid, self.state))
         if chara_pity is not consts.GenshinCharaPityType.CHARA_50 and chara_pity is not consts.GenshinCharaPityType.CHARA_100:
-            logging.error("Set state for user {} error: invalid GenshinCharaPityType {}".format(self.uid, chara_pity))
+            logger.error("Set state for user {} error: invalid GenshinCharaPityType {}".format(self.uid, chara_pity))
             return False
         chara_state = (chara_pulls, chara_pity.value)
         if weapon_pity is consts.GenshinWeaponPityType.WEAPON_50_PATH_0:
@@ -137,16 +137,16 @@ class GenshinUser:
         elif weapon_pity is consts.GenshinWeaponPityType.WEAPON_100_PATH_2:
             weapon_state = (weapon_pulls, 1, 2)
         else:
-            logging.error("Set state for user {} error: invalid GenshinWeaponPityType {}".format(self.uid, weapon_pity))
+            logger.error("Set state for user {} error: invalid GenshinWeaponPityType {}".format(self.uid, weapon_pity))
             return False
         state_plan = []
         for banner in plan:
             if banner is not consts.GenshinBannerType.CHARA and banner is not consts.GenshinBannerType.WEAPON:
-                logging.error("Set state for user {} error: invalid GenshinBannerType {}".format(self.uid, banner))
+                logger.error("Set state for user {} error: invalid GenshinBannerType {}".format(self.uid, banner))
                 return False
             state_plan.append(banner.value)
         self.state = model.GenshinWishModelState((chara_state, weapon_state, state_plan))
-        logging.info("Set state for user {}: {}".format(self.uid, self.state))
+        logger.info("Set state for user {}: {}".format(self.uid, self.state))
         return True
 
     def update_state_one_pull(self, banner: consts.GenshinBannerType, pull: consts.GenshinPullResultType):
@@ -274,7 +274,6 @@ def init_genshin_user(user_name, passcode):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     matplotlib.use('qtagg')
 
     user = GenshinUser(1)
@@ -309,7 +308,7 @@ if __name__ == "__main__":
     norm = mcolors.Normalize(vmin=0, vmax=1)
 
     aspect_ratio = dem[0] / dem[1]
-    plt.figure(figsize=(aspect_ratio, 1))
+    plt.figure(figsize=(16, 9))
     plt.imshow(graph, cmap=cmap, interpolation='none', aspect='auto', norm=norm)
 
     plt.fill_betweenx(y=[-0.5, len(agg) - 0.5], x1=pull, x2=pull, color='blue')

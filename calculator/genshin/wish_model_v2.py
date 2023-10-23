@@ -1,11 +1,11 @@
 import base64
 import copy
 import hashlib
-import logging
 import pickle
 import os
 import time
 
+from loguru import logger
 from calculator.genshin import consts
 from calculator.definitions import ROOT_DIR
 
@@ -109,7 +109,7 @@ class GenshinWishModelV2:
             self.__fill_chance()
             self.__fill_cache()
             self.__dump_cache()
-            logging.info("Build model in " + str(time.time() - start) + " second(s)")
+            logger.info("Build model in " + str(time.time() - start) + " second(s)")
 
     def __dump_cache(self):
         cache = {
@@ -294,7 +294,6 @@ class GenshinWishModelV2:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     model = GenshinWishModelV2(force=True)
     state = GenshinWishModelState(((74, 0), (1, 0, 0), [0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1]))
     res = model.get_next_states(state)
