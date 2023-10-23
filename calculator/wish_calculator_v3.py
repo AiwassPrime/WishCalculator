@@ -4,7 +4,6 @@ import os
 import pickle
 import time
 
-import cupy as cp
 import numpy as np
 import scipy.sparse as sp
 
@@ -81,7 +80,11 @@ class WishCalculatorV3:
 
         target_index = self.adjacency_matrix_index[self.init_state.get_goal_state()[-1]]
 
-        if cp.cuda.runtime.getDeviceCount() == 0 or force_cpu:
+        try:
+            import cupy as cp
+        except ImportError:
+            force_cpu = True
+        if force_cpu or cp.cuda.runtime.getDeviceCount() == 0:
             logging.info("Use CPU")
             result = np.zeros((len(self.adjacency_matrix_index), max_steps), dtype=float)
             coo_matrix = sp.coo_matrix(self.adjacency_matrix)

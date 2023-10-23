@@ -3,6 +3,8 @@ import logging
 from dataclasses import dataclass
 
 import numpy as np
+import matplotlib
+
 from matplotlib import pyplot as plt
 
 import wish_model_v2 as model
@@ -207,14 +209,14 @@ class GenshinUser:
                 return self, False
         return new_self, True
 
-    def trigger_calculator(self):
+    def trigger_calculator(self, force_cpu=False):
         state_list = self.state.get_reduced_state()
         for state in state_list:
-            self.calculator[state] = WishCalculatorV3(self.model, state)
+            self.calculator[state] = WishCalculatorV3(self.model, state, force_cpu=force_cpu)
 
     def get_total_pull(self):
         pull_strict = self.resource.intertwined_fate + self.resource.primogem // 160 + self.resource.genesis_crystal // 160 \
-            + self.resource.starglitter // 5
+                      + self.resource.starglitter // 5
 
         return pull_strict, pull_strict / 25 * 26
 
@@ -273,30 +275,31 @@ def init_genshin_user(user_name, passcode):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+    matplotlib.use('qtagg')
 
     user = GenshinUser(1)
 
-    user.update_resource(consts.GenshinResourceAction.ADJUST_FATE, 47)
-    user.update_resource(consts.GenshinResourceAction.ADJUST_GEM, 62216)
-    user.update_resource(consts.GenshinResourceAction.ADJUST_CRYSTAL, 38588)
-    user.update_resource(consts.GenshinResourceAction.ADJUST_STAR, 78)
+    user.update_resource(consts.GenshinResourceAction.ADJUST_FATE, 650)
+    user.update_resource(consts.GenshinResourceAction.ADJUST_GEM, 0)
+    user.update_resource(consts.GenshinResourceAction.ADJUST_CRYSTAL, 0)
+    user.update_resource(consts.GenshinResourceAction.ADJUST_STAR, 0)
     pull, pull_est = user.get_total_pull()
 
-    user.set_state(8, consts.GenshinCharaPityType.CHARA_100, 1, consts.GenshinWeaponPityType.WEAPON_50_PATH_0,
+    user.set_state(40, consts.GenshinCharaPityType.CHARA_100, 40, consts.GenshinWeaponPityType.WEAPON_100_PATH_0,
                    [consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA,
                     consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA,
                     consts.GenshinBannerType.CHARA, consts.GenshinBannerType.WEAPON])
 
-    # user.update_resource(consts.GenshinResourceAction.ADJUST_FATE, 95)
-    # user.update_resource(consts.GenshinResourceAction.ADJUST_GEM, 23000)
+    # user.update_resource(consts.GenshinResourceAction.ADJUST_FATE, 20)
+    # user.update_resource(consts.GenshinResourceAction.ADJUST_GEM, 0)
     # user.update_resource(consts.GenshinResourceAction.ADJUST_CRYSTAL, 0)
     # user.update_resource(consts.GenshinResourceAction.ADJUST_STAR, 0)
     # pull, pull_est = user.get_total_pull()
     #
-    # user.set_state(7, consts.GenshinCharaPityType.CHARA_50, 0, consts.GenshinWeaponPityType.WEAPON_50_PATH_0,
+    # user.set_state(32, consts.GenshinCharaPityType.CHARA_100, 0, consts.GenshinWeaponPityType.WEAPON_50_PATH_0,
     #                [consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA])
 
-    user.trigger_calculator()
+    user.trigger_calculator(force_cpu=True)
 
     raw, is_success = user.get_raw_result()
     _, graph, dem = process_result(raw)
