@@ -140,10 +140,6 @@ class GenshinUser:
             weapon_state = (weapon_pulls, 0, 1)
         elif weapon_pity is consts.GenshinWeaponPityType.WEAPON_100_PATH_1:
             weapon_state = (weapon_pulls, 1, 1)
-        elif weapon_pity is consts.GenshinWeaponPityType.WEAPON_50_PATH_2:
-            weapon_state = (weapon_pulls, 0, 2)
-        elif weapon_pity is consts.GenshinWeaponPityType.WEAPON_100_PATH_2:
-            weapon_state = (weapon_pulls, 1, 2)
         else:
             logger.error("Set state for user {} error: invalid GenshinWeaponPityType {}".format(self.uid, weapon_pity))
             return False
@@ -286,13 +282,13 @@ if __name__ == "__main__":
 
     user = GenshinUser(1)
 
-    user.update_resource(consts.GenshinResourceAction.ADJUST_FATE, 650)
+    user.update_resource(consts.GenshinResourceAction.ADJUST_FATE, 841)
     user.update_resource(consts.GenshinResourceAction.ADJUST_GEM, 0)
     user.update_resource(consts.GenshinResourceAction.ADJUST_CRYSTAL, 0)
     user.update_resource(consts.GenshinResourceAction.ADJUST_STAR, 0)
     pull, pull_est = user.get_total_pull()
 
-    user.set_state(40, consts.GenshinCharaPityType.CHARA_100, 40, consts.GenshinWeaponPityType.WEAPON_100_PATH_0,
+    user.set_state(0, consts.GenshinCharaPityType.CHARA_50, 0, consts.GenshinWeaponPityType.WEAPON_50_PATH_0,
                    [consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA,
                     consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA,
                     consts.GenshinBannerType.CHARA, consts.GenshinBannerType.WEAPON])
