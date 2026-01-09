@@ -1,3 +1,11 @@
+import sys
+import os
+
+# Add project root to Python path for direct execution
+_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
 import copy
 from loguru import logger
 from dataclasses import dataclass
@@ -7,7 +15,7 @@ import matplotlib
 
 from matplotlib import pyplot as plt
 
-import wish_model_v2 as model
+from calculator.genshin import wish_model_v2 as model
 from calculator.genshin import consts
 import matplotlib.colors as mcolors
 from calculator.wish_calculator_v3 import WishCalculatorV3
