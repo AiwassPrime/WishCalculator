@@ -14,6 +14,8 @@ import numpy as np
 import matplotlib
 
 from matplotlib import pyplot as plt
+from matplotlib.widgets import Cursor
+import matplotlib.patches as mpatches
 
 from calculator.genshin import wish_model_v2 as model
 from calculator.genshin import consts
@@ -333,4 +335,48 @@ if __name__ == "__main__":
 
     plt.text(pull, -0.8, 'You={}'.format(pull), color='blue', fontsize=12, ha='center', va='center')
 
+    # 添加可拖动的竖线
+    ax = plt.gca()
+    x_min, x_max = ax.get_xlim()
+    y_min, y_max = ax.get_ylim()
+    
+    # 初始竖线位置（在中间）
+    initial_x = (x_min + x_max) / 2
+    vertical_line = ax.axvline(x=initial_x, color='red', linewidth=2, linestyle='--', alpha=0.7)
+    text_label = ax.text(initial_x, y_max * 0.95, f'x = {int(initial_x)}', 
+                         color='red', fontsize=12, ha='center', 
+                         bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    # 拖动状态（使用列表避免nonlocal问题）
+    drag_state = {'is_dragging': False}
+    
+    def on_press(event):
+        if event.inaxes != ax:
+            return
+        # 检查是否点击在竖线附近
+        line_x = vertical_line.get_xdata()[0]
+        if abs(event.xdata - line_x) < (x_max - x_min) * 0.02:  # 2%的容差
+            drag_state['is_dragging'] = True
+    
+    def on_motion(event):
+        if not drag_state['is_dragging'] or event.inaxes != ax:
+            return
+        if event.xdata is None:
+            return
+        # 限制x值在图表范围内
+        x_pos = max(x_min, min(x_max, event.xdata))
+        vertical_line.set_xdata([x_pos, x_pos])
+        text_label.set_x(x_pos)
+        text_label.set_text(f'x = {int(x_pos)}')
+        plt.draw()
+    
+    def on_release(event):
+        drag_state['is_dragging'] = False
+    
+    # 连接事件
+    fig = plt.gcf()
+    fig.canvas.mpl_connect('button_press_event', on_press)
+    fig.canvas.mpl_connect('motion_notify_event', on_motion)
+    fig.canvas.mpl_connect('button_release_event', on_release)
+    
     plt.show()
