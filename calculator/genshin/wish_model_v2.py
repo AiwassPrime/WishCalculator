@@ -1,11 +1,11 @@
 import base64
 import copy
 import hashlib
-import logging
 import pickle
 import os
 import time
 
+from loguru import logger
 from calculator.genshin import consts
 from calculator.definitions import ROOT_DIR
 
@@ -109,7 +109,7 @@ class GenshinWishModelV2:
             self.__fill_chance()
             self.__fill_cache()
             self.__dump_cache()
-            logging.info("Build model in " + str(time.time() - start) + " second(s)")
+            logger.info("Build model in " + str(time.time() - start) + " second(s)")
 
     def __dump_cache(self):
         cache = {
@@ -157,9 +157,9 @@ class GenshinWishModelV2:
                         (1.0, (0, 0), True, consts.GenshinPullResultType.GET_TARGET))  # get want
                 else:
                     chara_cache.setdefault(curr_process, []).append(
-                        (0.5, (0, 0), True, consts.GenshinPullResultType.GET_TARGET))  # get want
+                        (0.55, (0, 0), True, consts.GenshinPullResultType.GET_TARGET))  # get want
                     chara_cache.setdefault(curr_process, []).append(
-                        (0.5, (0, 1), False, consts.GenshinPullResultType.GET_PITY))  # get pity
+                        (0.45, (0, 1), False, consts.GenshinPullResultType.GET_PITY))  # get pity
                     if (0, 1) not in bfs_set:
                         bfs_set.add((0, 1))
                         bfs_queue.append((0, 1))
@@ -176,10 +176,10 @@ class GenshinWishModelV2:
                         bfs_queue.append((curr_process[0] + 1, 1))
                 else:
                     chara_cache.setdefault(curr_process, []).append(
-                        (self.chara[curr_process[0] + 1] * 0.5, (0, 0), True,
+                        (self.chara[curr_process[0] + 1] * 0.55, (0, 0), True,
                          consts.GenshinPullResultType.GET_TARGET))  # get want
                     chara_cache.setdefault(curr_process, []).append(
-                        (self.chara[curr_process[0] + 1] * 0.5, (0, 1), False,
+                        (self.chara[curr_process[0] + 1] * 0.45, (0, 1), False,
                          consts.GenshinPullResultType.GET_PITY))  # get pity
                     chara_cache.setdefault(curr_process, []).append((
                         1.0 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, 0), False,
@@ -198,7 +198,7 @@ class GenshinWishModelV2:
         while len(bfs_queue) > 0:
             curr_process = bfs_queue.pop()
             if self.weapon[curr_process[0] + 1] >= 1:
-                if curr_process[2] >= 2:
+                if curr_process[2] >= 1:
                     weapon_cache.setdefault(curr_process, []).append(
                         (1.0, (0, 0, 0), True, consts.GenshinPullResultType.GET_TARGET))  # get want
                 elif curr_process[1] >= 1:
@@ -225,7 +225,7 @@ class GenshinWishModelV2:
                         bfs_set.add((0, 1, curr_process[2] + 1))
                         bfs_queue.append((0, 1, curr_process[2] + 1))
             else:
-                if curr_process[2] >= 2:
+                if curr_process[2] >= 1:
                     weapon_cache.setdefault(curr_process, []).append(
                         (self.weapon[curr_process[0] + 1], (0, 0, 0), True,
                          consts.GenshinPullResultType.GET_TARGET))  # get want
@@ -294,7 +294,6 @@ class GenshinWishModelV2:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     model = GenshinWishModelV2(force=True)
     state = GenshinWishModelState(((74, 0), (1, 0, 0), [0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1]))
     res = model.get_next_states(state)

@@ -1,11 +1,23 @@
+import sys
+import os
+
+# Add project root to Python path for direct execution
+_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
 import copy
-import logging
+from loguru import logger
 from dataclasses import dataclass
 
 import numpy as np
-from matplotlib import pyplot as plt
+import matplotlib
 
-import wish_model_v2 as model
+from matplotlib import pyplot as plt
+from matplotlib.widgets import Cursor
+import matplotlib.patches as mpatches
+
+from calculator.genshin import wish_model_v2 as model
 from calculator.genshin import consts
 import matplotlib.colors as mcolors
 from calculator.wish_calculator_v3 import WishCalculatorV3
@@ -20,22 +32,30 @@ class GenshinResource:
 
 
 class GenshinUser:
-    def __init__(self, uid):
+    def __init__(self, uid, state=None, resource=None, prev=None):
         self.uid = uid
 
-        self.state = model.GenshinWishModelState(((0, 0), (0, 0, 0), []))
-        self.resource = GenshinResource(0, 0, 0, 0)
+        if state is None:
+            self.state = model.GenshinWishModelState(((0, 0), (0, 0, 0), []))
+        else:
+            self.state = state
+        if resource is None:
+            self.resource = GenshinResource(0, 0, 0, 0)
+        else:
+            self.resource = resource
 
         self.model = model.GenshinWishModelV2()
         self.calculator = {}
 
+        self.prev = prev
+
     def get_resource(self):
-        logging.info("Get resources for user {}: {}".format(self.uid, self.resource))
+        logger.info("Get resources for user {}: {}".format(self.uid, self.resource))
         return self.resource
 
     def set_resource(self, intertwined_fate, genesis_crystal, primogem, starglitter):
         self.resource = GenshinResource(intertwined_fate, genesis_crystal, primogem, starglitter)
-        logging.info("Set resources for user {}: {}".format(self.uid, self.resource))
+        logger.info("Set resources for user {}: {}".format(self.uid, self.resource))
 
     def __adjust_fate(self, amount: int):
         self.resource.intertwined_fate = amount
@@ -78,7 +98,7 @@ class GenshinUser:
             return True
 
     def update_resource(self, action: consts.GenshinResourceAction, amount: int) -> bool:
-        logging.info("Try to update resources for user {}: {}".format(self.uid, self.resource))
+        logger.info("Try to update resources for user {}: {}".format(self.uid, self.resource))
         action_dict = {
             consts.GenshinResourceAction.ADJUST_FATE: self.__adjust_fate,
             consts.GenshinResourceAction.ADJUST_CRYSTAL: self.__adjust_crystal,
@@ -92,26 +112,26 @@ class GenshinUser:
         if selected_action is not None:
             is_success = selected_action(amount)
             if is_success:
-                logging.info("Updated resources for user {}: {}".format(self.uid, self.resource))
+                logger.info("Updated resources for user {}: {}".format(self.uid, self.resource))
             else:
-                logging.warning(
+                logger.warning(
                     "Cannot updated resources for user {} with GenshinResourceAction{}: {}".format(self.uid, action,
                                                                                                    self.resource))
             return is_success
         else:
-            logging.error(
+            logger.error(
                 "Update resources for user {} error: invalid GenshinResourceAction {}".format(self.uid, action))
             return False
 
     def get_state(self):
-        logging.info("Get state for user {}: {}".format(self.uid, self.state))
+        logger.info("Get state for user {}: {}".format(self.uid, self.state))
         return self.state
 
     def set_state(self, chara_pulls: int, chara_pity: consts.GenshinCharaPityType, weapon_pulls: int,
                   weapon_pity: consts.GenshinWeaponPityType, plan: list[consts.GenshinBannerType]) -> bool:
-        logging.info("Try to set state for user {}: {}".format(self.uid, self.state))
+        logger.info("Try to set state for user {}: {}".format(self.uid, self.state))
         if chara_pity is not consts.GenshinCharaPityType.CHARA_50 and chara_pity is not consts.GenshinCharaPityType.CHARA_100:
-            logging.error("Set state for user {} error: invalid GenshinCharaPityType {}".format(self.uid, chara_pity))
+            logger.error("Set state for user {} error: invalid GenshinCharaPityType {}".format(self.uid, chara_pity))
             return False
         chara_state = (chara_pulls, chara_pity.value)
         if weapon_pity is consts.GenshinWeaponPityType.WEAPON_50_PATH_0:
@@ -122,38 +142,35 @@ class GenshinUser:
             weapon_state = (weapon_pulls, 0, 1)
         elif weapon_pity is consts.GenshinWeaponPityType.WEAPON_100_PATH_1:
             weapon_state = (weapon_pulls, 1, 1)
-        elif weapon_pity is consts.GenshinWeaponPityType.WEAPON_50_PATH_2:
-            weapon_state = (weapon_pulls, 0, 2)
-        elif weapon_pity is consts.GenshinWeaponPityType.WEAPON_100_PATH_2:
-            weapon_state = (weapon_pulls, 1, 2)
         else:
-            logging.error("Set state for user {} error: invalid GenshinWeaponPityType {}".format(self.uid, weapon_pity))
+            logger.error("Set state for user {} error: invalid GenshinWeaponPityType {}".format(self.uid, weapon_pity))
             return False
         state_plan = []
         for banner in plan:
             if banner is not consts.GenshinBannerType.CHARA and banner is not consts.GenshinBannerType.WEAPON:
-                logging.error("Set state for user {} error: invalid GenshinBannerType {}".format(self.uid, banner))
+                logger.error("Set state for user {} error: invalid GenshinBannerType {}".format(self.uid, banner))
                 return False
             state_plan.append(banner.value)
         self.state = model.GenshinWishModelState((chara_state, weapon_state, state_plan))
-        logging.info("Set state for user {}: {}".format(self.uid, self.state))
+        logger.info("Set state for user {}: {}".format(self.uid, self.state))
         return True
 
-    def update_state_one_pull(self, banner: consts.GenshinBannerType, pull: consts.GenshinPullResultType) -> bool:
+    def update_state_one_pull(self, banner: consts.GenshinBannerType, pull: consts.GenshinPullResultType):
+        update_resource = copy.deepcopy(self.resource)
         if self.resource.intertwined_fate > 0:
-            self.resource.intertwined_fate -= 1
+            update_resource.intertwined_fate -= 1
         elif 0 < self.resource.primogem < 160:
             if self.resource.genesis_crystal >= (160 - self.resource.primogem):
-                self.resource.genesis_crystal -= (160 - self.resource.primogem)
-                self.resource.primogem = 0
+                update_resource.genesis_crystal -= (160 - self.resource.primogem)
+                update_resource.primogem = 0
             else:
-                return False
+                return self, False
         elif self.resource.primogem >= 160:
-            self.resource.primogem -= 160
+            update_resource.primogem -= 160
         elif self.resource.genesis_crystal >= 160:
-            self.resource.genesis_crystal -= 160
+            update_resource.genesis_crystal -= 160
         else:
-            return False
+            return self, False
 
         if banner.value == self.state[2][0]:
             next_states = self.model.get_next_states(self.state)
@@ -163,9 +180,9 @@ class GenshinUser:
                     update_state = next_state[1]
                     break
             if update_state is None:
-                return False
-            self.state = update_state
-            return True
+                return self, False
+            new_user = GenshinUser(self.uid, state=update_state, resource=update_resource, prev=self)
+            return new_user, True
         elif banner.value in self.state[2]:
             index = self.state[2].index(banner.value)
 
@@ -180,32 +197,34 @@ class GenshinUser:
                     update_state = next_state[1]
                     break
             if update_state is None:
-                return False
-            self.state = model.GenshinWishModelState((update_state[0], update_state[1], old_plan + update_state[2]))
-            return True
+                return self, False
+
+            new_user = GenshinUser(self.uid, state=model.GenshinWishModelState(
+                (update_state[0], update_state[1], old_plan + update_state[2])), resource=update_resource, prev=self)
+            return new_user, True
         else:
-            return True
+            new_user = GenshinUser(self.uid, state=self.state, resource=update_resource, prev=self)
+            return new_user, True
 
     def update_state_n_pull(self, banner: consts.GenshinBannerType,
-                            pull_list: list[consts.GenshinPullResultType]) -> bool:
-        original_state = copy.deepcopy(self.state)
-        original_resource = copy.deepcopy(self.resource)
+                            pull_list: list[consts.GenshinPullResultType]):
+        new_self = copy.deepcopy(self)
         for result in pull_list:
-            is_success = self.update_state_one_pull(banner, result)
+            new_self, is_success = new_self.update_state_one_pull(banner, result)
             if not is_success:
-                self.state = original_state
-                self.resource = original_resource
-                return False
-        return True
+                return self, False
+        return new_self, True
 
-    def trigger_calculator(self):
+    def trigger_calculator(self, force_cpu=False):
         state_list = self.state.get_reduced_state()
         for state in state_list:
-            self.calculator[state] = WishCalculatorV3(self.model, state)
+            self.calculator[state] = WishCalculatorV3(self.model, state, force_cpu=force_cpu)
 
     def get_total_pull(self):
-        return self.resource.intertwined_fate + self.resource.primogem // 160 + self.resource.genesis_crystal // 160 \
-            + self.resource.starglitter // 5
+        pull_strict = self.resource.intertwined_fate + self.resource.primogem // 160 + self.resource.genesis_crystal // 160 \
+                      + self.resource.starglitter // 5
+
+        return pull_strict, pull_strict / 25 * 26
 
     def get_raw_result(self):
         no_regenerate = True
@@ -229,14 +248,15 @@ def process_result(result):
         row += 1
         if len(res) > column:
             column = len(res)
-    grid = [[1 for _ in range(column)] for _ in range(row)]
+    grid = [[1 for _ in range(column + 1)] for _ in range(row)]
     for index_x, stats in enumerate(result.values()):
+        grid[index_x][0] = 0.0
         for index_y, stat in enumerate(stats):
-            grid[index_x][index_y] = stat
+            grid[index_x][index_y + 1] = stat
     return result, grid, (row, column)
 
 
-def process_result_agg(result):
+def process_result_agg(result, agg_list):
     agg_result = {}
     row = 0
     column = 0
@@ -244,52 +264,64 @@ def process_result_agg(result):
         row += 1
         if len(res) > column:
             column = len(res)
-        index_10 = np.searchsorted(res, "0.1", side='right')
-        index_25 = np.searchsorted(res, "0.25", side='right')
-        index_50 = np.searchsorted(res, "0.5", side='right')
-        index_75 = np.searchsorted(res, "0.75", side='right')
-        index_90 = np.searchsorted(res, "0.9", side='right')
-        agg_result[state] = [index_10, index_25, index_50, index_75, index_90]
-    grid = [[0 for _ in range(column)] for _ in range(row)]
+        agg_res = []
+        for agg_num in agg_list:
+            agg_res.append(np.searchsorted(res, agg_num, side='right'))
+        agg_result[state] = agg_res
+    grid = [[0 for _ in range(column + 1)] for _ in range(row)]
     for index, agg_stats in enumerate(agg_result.values()):
         for stats in agg_stats:
-            grid[index][stats] = 1
+            grid[index][stats + 1] = 1
     return agg_result, grid, (row, column)
 
 
+def init_genshin_user(user_name, passcode):
+    return GenshinUser(hash(user_name))
+
+
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    matplotlib.use('qtagg')
 
     user = GenshinUser(1)
 
-    user.update_resource(consts.GenshinResourceAction.ADJUST_FATE, 47)
-    user.update_resource(consts.GenshinResourceAction.ADJUST_GEM, 62216)
-    user.update_resource(consts.GenshinResourceAction.ADJUST_CRYSTAL, 38588)
-    user.update_resource(consts.GenshinResourceAction.ADJUST_STAR, 78)
-    pull = user.get_total_pull()
+    user.update_resource(consts.GenshinResourceAction.ADJUST_FATE, 841)
+    user.update_resource(consts.GenshinResourceAction.ADJUST_GEM, 0)
+    user.update_resource(consts.GenshinResourceAction.ADJUST_CRYSTAL, 0)
+    user.update_resource(consts.GenshinResourceAction.ADJUST_STAR, 0)
+    pull, pull_est = user.get_total_pull()
 
-    user.set_state(8, consts.GenshinCharaPityType.CHARA_100, 1, consts.GenshinWeaponPityType.WEAPON_50_PATH_0,
+    user.set_state(0, consts.GenshinCharaPityType.CHARA_50, 0, consts.GenshinWeaponPityType.WEAPON_50_PATH_0,
                    [consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA,
                     consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA,
                     consts.GenshinBannerType.CHARA, consts.GenshinBannerType.WEAPON])
 
-    user.trigger_calculator()
+    # user.update_resource(consts.GenshinResourceAction.ADJUST_FATE, 20)
+    # user.update_resource(consts.GenshinResourceAction.ADJUST_GEM, 0)
+    # user.update_resource(consts.GenshinResourceAction.ADJUST_CRYSTAL, 0)
+    # user.update_resource(consts.GenshinResourceAction.ADJUST_STAR, 0)
+    # pull, pull_est = user.get_total_pull()
+    #
+    # user.set_state(32, consts.GenshinCharaPityType.CHARA_100, 0, consts.GenshinWeaponPityType.WEAPON_50_PATH_0,
+    #                [consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA, consts.GenshinBannerType.CHARA])
+
+    user.trigger_calculator(force_cpu=True)
 
     raw, is_success = user.get_raw_result()
     _, graph, dem = process_result(raw)
-    agg, _, _ = process_result_agg(raw)
+    agg, _, _ = process_result_agg(raw, [0.1, 0.25, 0.5, 0.75, 0.9])
 
     cmap = plt.cm.RdYlGn
     norm = mcolors.Normalize(vmin=0, vmax=1)
 
     aspect_ratio = dem[0] / dem[1]
-    plt.figure(figsize=(aspect_ratio, 1))
+    plt.figure(figsize=(16, 9))
     plt.imshow(graph, cmap=cmap, interpolation='none', aspect='auto', norm=norm)
 
-    plt.fill_betweenx(y=[-0.5, 7.5], x1=pull, x2=pull, color='blue')
+    plt.fill_betweenx(y=[-0.5, len(agg) - 0.5], x1=pull, x2=pull, color='blue')
+    plt.fill_betweenx(y=[-0.5, len(agg) - 0.5], x1=pull_est, x2=pull_est, color='blue', alpha=0.2)
     for index, agg_stats in enumerate(agg.values()):
         for stats in agg_stats:
-            plt.fill_betweenx(y=[index-0.5, index+0.5], x1=stats, x2=stats, color='black')
+            plt.fill_betweenx(y=[index - 0.50, index + 0.49], x1=stats, x2=stats, color='black')
 
     cbar = plt.colorbar()
     cbar.set_label('Values')
@@ -303,4 +335,48 @@ if __name__ == "__main__":
 
     plt.text(pull, -0.8, 'You={}'.format(pull), color='blue', fontsize=12, ha='center', va='center')
 
+    # 添加可拖动的竖线
+    ax = plt.gca()
+    x_min, x_max = ax.get_xlim()
+    y_min, y_max = ax.get_ylim()
+    
+    # 初始竖线位置（在中间）
+    initial_x = (x_min + x_max) / 2
+    vertical_line = ax.axvline(x=initial_x, color='red', linewidth=2, linestyle='--', alpha=0.7)
+    text_label = ax.text(initial_x, y_max * 0.95, f'x = {int(initial_x)}', 
+                         color='red', fontsize=12, ha='center', 
+                         bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    # 拖动状态（使用列表避免nonlocal问题）
+    drag_state = {'is_dragging': False}
+    
+    def on_press(event):
+        if event.inaxes != ax:
+            return
+        # 检查是否点击在竖线附近
+        line_x = vertical_line.get_xdata()[0]
+        if abs(event.xdata - line_x) < (x_max - x_min) * 0.02:  # 2%的容差
+            drag_state['is_dragging'] = True
+    
+    def on_motion(event):
+        if not drag_state['is_dragging'] or event.inaxes != ax:
+            return
+        if event.xdata is None:
+            return
+        # 限制x值在图表范围内
+        x_pos = max(x_min, min(x_max, event.xdata))
+        vertical_line.set_xdata([x_pos, x_pos])
+        text_label.set_x(x_pos)
+        text_label.set_text(f'x = {int(x_pos)}')
+        plt.draw()
+    
+    def on_release(event):
+        drag_state['is_dragging'] = False
+    
+    # 连接事件
+    fig = plt.gcf()
+    fig.canvas.mpl_connect('button_press_event', on_press)
+    fig.canvas.mpl_connect('motion_notify_event', on_motion)
+    fig.canvas.mpl_connect('button_release_event', on_release)
+    
     plt.show()
