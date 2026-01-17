@@ -13,6 +13,11 @@ model_file_path = os.path.join(ROOT_DIR, 'models/endfield_chara.pkl')
 
 
 class EndfieldCharaWishModelState(tuple[tuple[int, int, int], list[int]]):
+    def __new__(cls, state_tuple):
+        if state_tuple[0][1] >= 120 and state_tuple[0][2] != 1:
+            raise Exception("State is invalid")
+        return super().__new__(cls, state_tuple)
+
     def __str__(self):
         return str((self[0], ''.join(map(str, self[1]))))
 
@@ -123,7 +128,8 @@ class EndfieldCharaWishModel:
         chara_cache = {}
         # tuple (x, y)
         # x: 80 count
-        # y: 120 count, -1 means already get
+        # y: 120/240 count
+        # z: 120 is used, 1 means used, 0 means not used
         bfs_queue = [(x, 0, 0) for x in range(80)]
         bfs_queue.extend([(x, 0, 1) for x in range(80)])
         bfs_set = set()
@@ -189,6 +195,6 @@ class EndfieldCharaWishModel:
 
 if __name__ == "__main__":
     module = EndfieldCharaWishModel(force=True)
-    state = EndfieldCharaWishModelState(((3, 121, 1), [0, 0]))
+    state = EndfieldCharaWishModelState(((40, 119, 1), [0, 0, 0]))
     n = module.get_next_states(state)
     print(n)
