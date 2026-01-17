@@ -120,7 +120,7 @@ class WishCalculatorV3:
         # 使用配置中的 max_steps_calculator 计算最大步数
         max_steps = self.model_config.max_steps_calculator(self.init_state)
 
-        goal_states = self.init_state.get_goal_state()[-1]
+        goal_states = self.model.get_goal_state(self.init_state)[-1]
         target_index = [self.adjacency_matrix_index[s] for s in goal_states]
 
         try:

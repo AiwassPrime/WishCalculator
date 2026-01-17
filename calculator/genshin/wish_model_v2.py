@@ -35,27 +35,6 @@ class GenshinWishModelState(tuple[tuple[int, int], tuple[int, int, int], list[in
             result_list.append(GenshinWishModelState((self[0], self[1], self[2][:i])))
         return result_list
 
-    def get_goal_state(self):
-        if len(self[2]) <= 0:
-            return [[]]
-        result_list = []
-        curr_target = self[2][0]
-        plan = self[2][1:]
-        curr_state = copy.deepcopy(self)
-        while len(plan) >= 0:
-            if curr_target == 0:
-                curr_state = GenshinWishModelState(((0, 0), curr_state[1], plan))
-                result_list.append([curr_state])
-            else:
-                curr_state = GenshinWishModelState((curr_state[0], (0, 0, 0), plan))
-                result_list.append([curr_state])
-            if len(plan) == 0:
-                break
-            curr_target = plan[0]
-            plan = plan[1:]
-
-        return result_list
-
     def get_plan_str(self):
         plan = self[2]
         if len(plan) == 0:
@@ -291,6 +270,27 @@ class GenshinWishModelV2:
             return [(chance, GenshinWishModelState(
                 (curr_state[0], weapon_state, (curr_state[2][1:] if is_want else curr_state[2]))), False, result) for
                     chance, weapon_state, is_want, result in self.weapon_cache[curr_state[1]]]
+
+    def get_goal_state(self, curr_state: GenshinWishModelState):
+        if len(curr_state[2]) <= 0:
+            return [[]]
+        result_list = []
+        curr_target = curr_state[2][0]
+        plan = curr_state[2][1:]
+        curr_state = copy.deepcopy(curr_state)
+        while len(plan) >= 0:
+            if curr_target == 0:
+                curr_state = GenshinWishModelState(((0, 0), curr_state[1], plan))
+                result_list.append([curr_state])
+            else:
+                curr_state = GenshinWishModelState((curr_state[0], (0, 0, 0), plan))
+                result_list.append([curr_state])
+            if len(plan) == 0:
+                break
+            curr_target = plan[0]
+            plan = plan[1:]
+
+        return result_list
 
 
 if __name__ == "__main__":

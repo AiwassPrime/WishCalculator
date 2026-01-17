@@ -297,10 +297,14 @@ def process_result_agg(
         agg_result[state] = agg_res
 
     # Create grid marking aggregation points
+    # Note: grid size is max_length + 1, so valid indices are 0 to max_length
+    # stat + 1 might exceed max_length if stat >= max_length, so we need to clamp it
     grid = [[0 for _ in range(max_length + 1)] for _ in range(num_states)]
     for index, agg_stats in enumerate(agg_result.values()):
         for stat in agg_stats:
-            grid[index][stat + 1] = 1
+            # Clamp stat + 1 to valid range [0, max_length]
+            grid_index = min(stat + 1, max_length)
+            grid[index][grid_index] = 1
 
     return agg_result, grid, (num_states, max_length)
 
