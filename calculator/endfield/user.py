@@ -190,18 +190,19 @@ class EndfieldUser:
     # Calculator Methods
     # ========================================================================
 
-    def trigger_calculator(self, force_cpu: bool = False) -> None:
+    def trigger_calculator(self, force_cpu: bool = False, use_dense: bool = False) -> None:
         """
         Trigger calculator for all reduced states.
 
         Args:
             force_cpu: Force CPU usage instead of GPU
+            use_dense: Use dense array calculation
         """
         state_list = self.state.get_reduced_state()
         model_config = create_endfield_chara_config()
         for state in state_list:
             self.calculator[state] = WishCalculatorV3(
-                self.model, state, model_config, force_cpu=force_cpu
+                self.model, state, model_config, force_cpu=force_cpu, use_dense=use_dense
             )
 
     def get_total_pull(self) -> Tuple[int, float]:
@@ -302,9 +303,7 @@ def process_result_agg(
     grid = [[0 for _ in range(max_length + 1)] for _ in range(num_states)]
     for index, agg_stats in enumerate(agg_result.values()):
         for stat in agg_stats:
-            # Clamp stat + 1 to valid range [0, max_length]
-            grid_index = min(stat + 1, max_length)
-            grid[index][grid_index] = 1
+            grid[index][stat + 1] = 1
 
     return agg_result, grid, (num_states, max_length)
 
@@ -348,11 +347,16 @@ if __name__ == "__main__":
         True,
         [
             consts.EndfieldBannerType.CHARA,
+            consts.EndfieldBannerType.CHARA,
+            consts.EndfieldBannerType.CHARA,
+            consts.EndfieldBannerType.CHARA,
+            consts.EndfieldBannerType.CHARA,
+            consts.EndfieldBannerType.CHARA,
         ]
     )
 
     # Trigger calculator
-    user.trigger_calculator(force_cpu=True)
+    user.trigger_calculator(force_cpu=True, use_dense=False)
 
     # Get and process results
     raw, is_success = user.get_raw_result()

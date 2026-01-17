@@ -41,84 +41,6 @@ class EndfieldCharaWishModelState(tuple[tuple[int, int, int], list[int]]):
             result_list.append(EndfieldCharaWishModelState((self[0], self[1][:i])))
         return result_list
 
-    def get_goal_state(self):
-        if len(self[1]) <= 0:
-            return [[]]
-        
-        initial_plan_length = len(self[1])
-        
-        # Initialize result structure: list of lists, indexed by plan length
-        # result[0] = states with plan length = initial_plan_length - 1
-        # result[1] = states with plan length = initial_plan_length - 2
-        # ...
-        # result[initial_plan_length - 1] = states with plan length = 0
-        result = [[] for _ in range(initial_plan_length)]
-        
-        # Use BFS to explore all possible states
-        # Use full state tuple as key to avoid hash collision issues
-        # Key format: (state[0], tuple(state[1])) to ensure uniqueness
-        processed_for_bfs = set()  # States we've already expanded in BFS
-        queue = [self]
-        
-        # Helper function to create a unique key for state comparison
-        def get_state_key(state):
-            return (state[0], tuple(state[1]))
-        
-        # Use dict for faster lookup in result lists
-        result_sets = [set() for _ in range(initial_plan_length)]
-        
-        while queue:
-            curr_state = queue.pop(0)
-            curr_plan_length = len(curr_state[1])
-            curr_key = get_state_key(curr_state)
-            
-            # Skip if already processed (to avoid infinite loops)
-            if curr_key in processed_for_bfs:
-                continue
-            
-            # If plan length is 0, add to result and don't continue
-            if curr_plan_length == 0:
-                result_index = initial_plan_length - 1
-                if curr_key not in result_sets[result_index]:
-                    result_sets[result_index].add(curr_key)
-                    result[result_index].append(curr_state)
-                continue
-            
-            # Mark as processed
-            processed_for_bfs.add(curr_key)
-            
-            # Get next states from model
-            model = EndfieldCharaWishModel()
-            try:
-                next_states = model.get_next_states(curr_state)
-            except (KeyError, Exception) as e:
-                # If get_next_states fails (e.g., state not in cache), skip
-                # This can happen if state exceeds MAX_PULL limit
-                continue
-            
-            # Process each next state
-            for _, next_state, _, _ in next_states:
-                
-                next_plan_length = len(next_state[1])
-                next_key = get_state_key(next_state)
-                
-                # Calculate the index in result list
-                # result[0] should contain states with plan length = initial_plan_length - 1
-                # result[k] should contain states with plan length = initial_plan_length - 1 - k
-                if 0 <= next_plan_length < initial_plan_length:
-                    result_index = initial_plan_length - next_plan_length - 1
-                    if 0 <= result_index < len(result):
-                        # Add to result if not already present (using set for O(1) lookup)
-                        if next_key not in result_sets[result_index]:
-                            result_sets[result_index].add(next_key)
-                            result[result_index].append(next_state)
-                
-                # Continue BFS if plan length > 0 and state not yet processed
-                if next_plan_length > 0 and next_key not in processed_for_bfs:
-                    queue.append(next_state)
-        
-        return result
-
     def get_plan_str(self):
         plan = self[1]
         if len(plan) == 0:
@@ -207,7 +129,7 @@ class EndfieldCharaWishModel:
                 # just hit 120, must get want
                 chara_cache.setdefault(curr_process, []).append(
                     (1, (0, curr_process[1] + 1, 1), True, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
-                if curr_process[1] + 1 <= MAX_PULL:
+                if curr_process[1] + 1 < MAX_PULL:
                     bfs_queue.append((0, curr_process[1] + 1, 1))
             else:
                 if self.chara[curr_process[0] + 1] >= 1:
@@ -216,7 +138,7 @@ class EndfieldCharaWishModel:
                         (0.5, (0, curr_process[1] + 1, 1), True, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
                     chara_cache.setdefault(curr_process, []).append(
                         (0.5, (0, curr_process[1] + 1, curr_process[2]), False, consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
-                    if curr_process[1] + 1 <= MAX_PULL:
+                    if curr_process[1] + 1 < MAX_PULL:
                         bfs_queue.append((0, curr_process[1] + 1, 1))
                         bfs_queue.append((0, curr_process[1] + 1, curr_process[2]))
                 else:
@@ -230,7 +152,7 @@ class EndfieldCharaWishModel:
                     chara_cache.setdefault(curr_process, []).append(
                         (1 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, curr_process[1] + 1, curr_process[2]), False,
                          consts.EndfieldCharaPullResultType.GET_NOTHING))  # get nothing
-                    if curr_process[1] + 1 <= MAX_PULL:
+                    if curr_process[1] + 1 < MAX_PULL:
                         bfs_queue.append((0, curr_process[1] + 1, 1))
                         bfs_queue.append((0, curr_process[1] + 1, curr_process[2]))
                         bfs_queue.append((curr_process[0] + 1, curr_process[1] + 1, curr_process[2]))
@@ -257,12 +179,35 @@ class EndfieldCharaWishModel:
                     res.append((chance, EndfieldCharaWishModelState((chara_state, curr_state[1])), False, result))
         return res
 
+    def get_goal_state(self, curr_state: EndfieldCharaWishModelState):
+        if len(curr_state[1]) <= 0:
+            return [[]]
+        result = [[] for _ in range(len(curr_state[1]))]
+        bfs_queue = [curr_state]
+        bfs_set = set()
+        add_set = set()
+        while len(bfs_queue) > 0:
+            curr_process = bfs_queue.pop()
+            if curr_process in bfs_set:
+                continue
+            bfs_set.add(curr_process)
+            for _, next_state, _, _ in self.get_next_states(curr_process):
+                if len(next_state[1]) >= len(curr_state[1]):
+                    bfs_queue.append(next_state)
+                elif len(next_state[1]) <= 0:
+                    if next_state not in add_set:
+                        add_set.add(next_state)
+                        result[-1].append(next_state)
+                else:
+                    if next_state not in add_set:
+                        add_set.add(next_state)
+                        result[len(curr_state[1])-len(next_state[1])-1].append(next_state)
+                    bfs_queue.append(next_state)
+        return result
+
 
 if __name__ == "__main__":
     module = EndfieldCharaWishModel(force=True)
-    state = EndfieldCharaWishModelState(((0, 0, 0), [0]))
-    n = module.get_next_states(state)
-    goal_states = state.get_goal_state()
-    print(f"Goal states: {len(goal_states)} groups")
-    for i, group in enumerate(goal_states):
-        print(f"Group {i} (plan length {len(state[1]) - 1 - i}): {len(group)} states")
+    state = EndfieldCharaWishModelState(((0, 0, 0), [0, 0, 0]))
+    g = module.get_goal_state(state)
+    print(len(g[2]))

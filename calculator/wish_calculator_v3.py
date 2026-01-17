@@ -40,7 +40,8 @@ class WishCalculatorV3:
         init_state,
         model_config: ModelConfig,
         force=False,
-        force_cpu=False
+        force_cpu=False,
+        use_dense=False
     ):
         """
         初始化 WishCalculatorV3
@@ -51,6 +52,7 @@ class WishCalculatorV3:
             model_config: 模型配置对象，包含模型特定的配置
             force: 是否强制重新构建模型
             force_cpu: 是否强制使用 CPU
+            use_dense: 是否使用 dense array 乘法（默认 False，使用 sparse array）
         """
         self.model = wish_model
         self.init_state = init_state
@@ -69,13 +71,13 @@ class WishCalculatorV3:
         self.result = None
 
         if force:
-            self.__build_model(force_cpu=force_cpu)
+            self.__build_model(force_cpu=force_cpu, use_dense=use_dense)
             self.__save_cache()
         else:
             if self.__is_cache_exist():
                 self.__load_cache()
             else:
-                self.__build_model(force_cpu=force_cpu)
+                self.__build_model(force_cpu=force_cpu, use_dense=use_dense)
                 self.__save_cache()
 
     def __is_cache_exist(self):
@@ -95,7 +97,7 @@ class WishCalculatorV3:
         self.adjacency_matrix = load["matrix"]
         self.result = load["result"]
 
-    def __build_model(self, force_cpu=False):
+    def __build_model(self, force_cpu=False, use_dense=False):
         start_time = time.time()
         dfs_set = set()
         dfs_set.add(self.init_state)
@@ -125,37 +127,74 @@ class WishCalculatorV3:
 
         try:
             import cupy as cp
-        except ImportError:
+            has_gpu = cp.cuda.runtime.getDeviceCount() > 0
+        except (ImportError, Exception):
             force_cpu = True
-        if force_cpu or cp.cuda.runtime.getDeviceCount() == 0:
-            logger.info("Use CPU")
+            has_gpu = False
+            cp = None
+        
+        if force_cpu or not has_gpu:
+            # CPU mode
+            logger.info(f"Use CPU ({'dense' if use_dense else 'sparse'} matrix)")
             result = np.zeros((len(self.adjacency_matrix_index), max_steps), dtype=float)
-            coo_matrix = sp.coo_matrix(self.adjacency_matrix)
-            inter_matrix = None
-            first_matrix = copy.deepcopy(coo_matrix)
-            for step in range(max_steps):
-                logger.debug("Step " + str(step))
-                if inter_matrix is None:
-                    inter_matrix = coo_matrix
-                    target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
+            
+            if use_dense:
+                # Dense matrix multiplication
+                inter_matrix = self.adjacency_matrix.copy()
+                first_matrix = self.adjacency_matrix.copy()
+                for step in range(max_steps):
+                    logger.debug("Step " + str(step))
+                    if step == 0:
+                        target_arrays = inter_matrix[:, target_index].sum(axis=1)
+                    else:
+                        inter_matrix = first_matrix @ inter_matrix
+                        target_arrays = inter_matrix[:, target_index].sum(axis=1)
                     result[:, step] = target_arrays
-                else:
-                    inter_matrix = first_matrix.dot(inter_matrix)
-                    target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
-                    result[:, step] = target_arrays
+            else:
+                # Sparse matrix multiplication (default)
+                coo_matrix = sp.coo_matrix(self.adjacency_matrix)
+                inter_matrix = None
+                first_matrix = copy.deepcopy(coo_matrix)
+                for step in range(max_steps):
+                    logger.debug("Step " + str(step))
+                    if inter_matrix is None:
+                        inter_matrix = coo_matrix
+                        target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
+                        result[:, step] = target_arrays
+                    else:
+                        inter_matrix = first_matrix.dot(inter_matrix)
+                        target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
+                        result[:, step] = target_arrays
         else:
-            logger.info("Use GPU")
+            # GPU mode
+            logger.info(f"Use GPU ({'dense' if use_dense else 'sparse'} matrix)")
             result = cp.zeros((len(self.adjacency_matrix_index), max_steps), dtype=float)
-            inter_matrix = cp.sparse.csr_matrix(cp.asarray(self.adjacency_matrix))
-            first_matrix = copy.deepcopy(inter_matrix)
-            for step in range(max_steps):
-                logger.debug("Step " + str(step))
-                if step == 0:
-                    target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
-                else:
-                    inter_matrix = first_matrix.dot(inter_matrix)
-                    target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
-                result[:, step] = target_arrays
+            
+            if use_dense:
+                # Dense matrix multiplication
+                inter_matrix = cp.asarray(self.adjacency_matrix)
+                first_matrix = cp.asarray(self.adjacency_matrix)
+                for step in range(max_steps):
+                    logger.debug("Step " + str(step))
+                    if step == 0:
+                        target_arrays = inter_matrix[:, target_index].sum(axis=1)
+                    else:
+                        inter_matrix = first_matrix @ inter_matrix
+                        target_arrays = inter_matrix[:, target_index].sum(axis=1)
+                    result[:, step] = target_arrays
+            else:
+                # Sparse matrix multiplication (default)
+                inter_matrix = cp.sparse.csr_matrix(cp.asarray(self.adjacency_matrix))
+                first_matrix = copy.deepcopy(inter_matrix)
+                for step in range(max_steps):
+                    logger.debug("Step " + str(step))
+                    if step == 0:
+                        target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
+                    else:
+                        inter_matrix = first_matrix.dot(inter_matrix)
+                        target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
+                    result[:, step] = target_arrays
+            
             result = cp.asnumpy(result)
 
         self.result = result
