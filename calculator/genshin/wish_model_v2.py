@@ -295,7 +295,8 @@ class GenshinWishModelV2:
 
 if __name__ == "__main__":
     model = GenshinWishModelV2(force=True)
-    state = GenshinWishModelState(((74, 0), (1, 0, 0), [0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1]))
+    state = GenshinWishModelState(((74, 0), (1, 0, 0), [0]))
     res = model.get_next_states(state)
     plan_s = state.get_plan_str()
-    print(plan_s)
+    state_s = state.get_goal_state()
+    print(res)
