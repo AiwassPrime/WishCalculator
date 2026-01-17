@@ -120,7 +120,8 @@ class WishCalculatorV3:
         # 使用配置中的 max_steps_calculator 计算最大步数
         max_steps = self.model_config.max_steps_calculator(self.init_state)
 
-        target_index = self.adjacency_matrix_index[self.init_state.get_goal_state()[-1]]
+        goal_states = self.init_state.get_goal_state()[-1]
+        target_index = [self.adjacency_matrix_index[s] for s in goal_states]
 
         try:
             import cupy as cp
@@ -136,11 +137,11 @@ class WishCalculatorV3:
                 logger.debug("Step " + str(step))
                 if inter_matrix is None:
                     inter_matrix = coo_matrix
-                    target_arrays = inter_matrix.toarray()[:, target_index]
+                    target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
                     result[:, step] = target_arrays
                 else:
                     inter_matrix = first_matrix.dot(inter_matrix)
-                    target_arrays = inter_matrix.toarray()[:, target_index]
+                    target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
                     result[:, step] = target_arrays
         else:
             logger.info("Use GPU")
@@ -150,10 +151,10 @@ class WishCalculatorV3:
             for step in range(max_steps):
                 logger.debug("Step " + str(step))
                 if step == 0:
-                    target_arrays = inter_matrix.toarray()[:, target_index]
+                    target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
                 else:
                     inter_matrix = first_matrix.dot(inter_matrix)
-                    target_arrays = inter_matrix.toarray()[:, target_index]
+                    target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
                 result[:, step] = target_arrays
             result = cp.asnumpy(result)
 
@@ -179,7 +180,7 @@ class WishCalculatorV3:
 #   def endfield_max_steps_calculator(init_state):
 #       # 根据 Endfield 的规则计算最大步数
 #       return len(init_state[1]) * 240  # 示例：每个目标最多240抽
-#   
+#
 #   endfield_config = ModelConfig(
 #       model_name='endfield_chara',
 #       max_steps_calculator=endfield_max_steps_calculator
@@ -209,6 +210,35 @@ def create_genshin_v2_config() -> ModelConfig:
     
     return ModelConfig(
         model_name='genshin_v2',
+        max_steps_calculator=max_steps_calculator,
+        cache_file_name_generator=cache_file_name_generator
+    )
+
+
+def create_endfield_chara_config() -> ModelConfig:
+    """
+    创建 Endfield Chara 模型的配置
+
+    Returns:
+        ModelConfig: Endfield Chara 模型的配置对象
+    """
+
+    def max_steps_calculator(init_state):
+        """计算 Endfield Chara 模型的最大步数"""
+        max_steps = 0
+        if len(init_state[1]) <= 1:
+            return 120
+        elif len(init_state[1]) == 2:
+            return 240
+        else:
+            return 240 * len(init_state[1]) - 1
+
+    def cache_file_name_generator(state, model_name):
+        """生成 Endfield Chara 模型的缓存文件名"""
+        return f'{model_name}_{state.gen_base64()}.pkl'
+
+    return ModelConfig(
+        model_name='endfield_chara',
         max_steps_calculator=max_steps_calculator,
         cache_file_name_generator=cache_file_name_generator
     )

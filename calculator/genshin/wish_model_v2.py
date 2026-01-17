@@ -37,7 +37,7 @@ class GenshinWishModelState(tuple[tuple[int, int], tuple[int, int, int], list[in
 
     def get_goal_state(self):
         if len(self[2]) <= 0:
-            return []
+            return [[]]
         result_list = []
         curr_target = self[2][0]
         plan = self[2][1:]
@@ -45,10 +45,10 @@ class GenshinWishModelState(tuple[tuple[int, int], tuple[int, int, int], list[in
         while len(plan) >= 0:
             if curr_target == 0:
                 curr_state = GenshinWishModelState(((0, 0), curr_state[1], plan))
-                result_list.append(curr_state)
+                result_list.append([curr_state])
             else:
                 curr_state = GenshinWishModelState((curr_state[0], (0, 0, 0), plan))
-                result_list.append(curr_state)
+                result_list.append([curr_state])
             if len(plan) == 0:
                 break
             curr_target = plan[0]
@@ -295,8 +295,8 @@ class GenshinWishModelV2:
 
 if __name__ == "__main__":
     model = GenshinWishModelV2(force=True)
-    state = GenshinWishModelState(((74, 0), (1, 0, 0), [0]))
+    state = GenshinWishModelState(((74, 0), (1, 0, 0), [0, 0, 1]))
     res = model.get_next_states(state)
     plan_s = state.get_plan_str()
     state_s = state.get_goal_state()
-    print(res)
+    print(state.get_goal_state())

@@ -11,6 +11,7 @@ from calculator.endfield import consts
 
 model_file_path = os.path.join(ROOT_DIR, 'models/endfield_chara.pkl')
 
+MAX_PULL = 1200
 
 class EndfieldCharaWishModelState(tuple[tuple[int, int, int], list[int]]):
     def __new__(cls, state_tuple):
@@ -46,7 +47,7 @@ class EndfieldCharaWishModelState(tuple[tuple[int, int, int], list[int]]):
         result_list = []
         plan = self[1][1:]
         while len(plan) >= 0:
-            curr_state = EndfieldCharaWishModelState(((0, 0), plan))
+            curr_state = EndfieldCharaWishModelState(((0, 120, 1), plan))
             result_list.append(curr_state)
             if len(plan) == 0:
                 break
@@ -142,7 +143,7 @@ class EndfieldCharaWishModel:
                 # just hit 120, must get want
                 chara_cache.setdefault(curr_process, []).append(
                     (1, (0, curr_process[1] + 1, 1), True, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
-                if curr_process[1] + 1 <= 1200:
+                if curr_process[1] + 1 <= MAX_PULL:
                     bfs_queue.append((0, curr_process[1] + 1, 1))
             else:
                 if self.chara[curr_process[0] + 1] >= 1:
@@ -151,7 +152,7 @@ class EndfieldCharaWishModel:
                         (0.5, (0, curr_process[1] + 1, 1), True, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
                     chara_cache.setdefault(curr_process, []).append(
                         (0.5, (0, curr_process[1] + 1, curr_process[2]), False, consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
-                    if curr_process[1] + 1 <= 1200:
+                    if curr_process[1] + 1 <= MAX_PULL:
                         bfs_queue.append((0, curr_process[1] + 1, 1))
                         bfs_queue.append((0, curr_process[1] + 1, curr_process[2]))
                 else:
@@ -165,7 +166,7 @@ class EndfieldCharaWishModel:
                     chara_cache.setdefault(curr_process, []).append(
                         (1 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, curr_process[1] + 1, curr_process[2]), False,
                          consts.EndfieldCharaPullResultType.GET_NOTHING))  # get nothing
-                    if curr_process[1] + 1 <= 1200:
+                    if curr_process[1] + 1 <= MAX_PULL:
                         bfs_queue.append((0, curr_process[1] + 1, 1))
                         bfs_queue.append((0, curr_process[1] + 1, curr_process[2]))
                         bfs_queue.append((curr_process[0] + 1, curr_process[1] + 1, curr_process[2]))
@@ -197,4 +198,4 @@ if __name__ == "__main__":
     module = EndfieldCharaWishModel(force=True)
     state = EndfieldCharaWishModelState(((40, 119, 1), [0, 0, 0]))
     n = module.get_next_states(state)
-    print(n)
+    print(state.get_goal_state())
