@@ -61,7 +61,7 @@ class WishCalculatorV3:
         # 生成缓存文件路径
         cache_filename = self.model_config.cache_file_name_generator(
             self.init_state,
-            self.model_config.model_name
+            self.model.model_name
         )
         self.model_file_path = os.path.join(ROOT_DIR, 'models', cache_filename)
 
@@ -130,8 +130,8 @@ class WishCalculatorV3:
             for curr_state in self.adjacency_list.keys():
                 curr_index = self.adjacency_matrix_index[curr_state]
                 next_states = self.adjacency_list[curr_state]
-                for prob, next_states, _, _ in next_states:
-                    next_idx = self.adjacency_matrix_index[next_states]
+                for prob, next_state, _, _ in next_states:
+                    next_idx = self.adjacency_matrix_index[next_state]
                     row_indices.append(curr_index)
                     col_indices.append(next_idx)
                     data.append(prob)

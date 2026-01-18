@@ -81,7 +81,7 @@ class EndfieldUser:
         self.uid = uid
         self.state = state or model.EndfieldCharaWishModelState(((0, 0, 0), [0]))
         self.resource = resource or EndfieldCharaResource(0)
-        self.model = model.EndfieldCharaWishModel()
+        self.model = model.EndfieldCharaWishModel(have_30_extra=False)
         self.calculator: Dict[model.EndfieldCharaWishModelState, WishCalculatorV3] = {}
         self.prev = prev
 
@@ -344,10 +344,9 @@ def show_graph():
     # Set state
     user.set_state(
         0,
-        0,
-        True,
+        60,
+        False,
         [
-            consts.EndfieldBannerType.CHARA,
             consts.EndfieldBannerType.CHARA,
             consts.EndfieldBannerType.CHARA,
             consts.EndfieldBannerType.CHARA,

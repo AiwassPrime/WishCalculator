@@ -9,9 +9,6 @@ from loguru import logger
 from calculator.genshin import consts
 from calculator.definitions import ROOT_DIR
 
-model_file_path = os.path.join(ROOT_DIR, 'models/genshin_v2.pkl')
-
-
 class GenshinWishModelState(tuple[tuple[int, int], tuple[int, int, int], list[int]]):
     def __str__(self):
         return str((self[0], self[1], ''.join(map(str, self[2]))))
@@ -66,13 +63,9 @@ class GenshinWishModelState(tuple[tuple[int, int], tuple[int, int, int], list[in
         return "-".join(result_plan)
 
 
-def is_cache_exist():
-    if os.path.exists(model_file_path):
-        return True
-    return False
-
-
 class GenshinWishModelV2:
+    model_name = 'genshin_v2'
+    model_file_path = os.path.join(ROOT_DIR, 'models/genshin_v2.pkl')
     chara = []
     weapon = []
     chara_cache = {}
@@ -81,7 +74,7 @@ class GenshinWishModelV2:
     def __init__(self, force=False):
         if not force and len(self.chara) != 0:
             return
-        if not force and is_cache_exist():
+        if not force and self.__is_cache_exist():
             self.__load_cache()
         else:
             start = time.time()
@@ -90,6 +83,11 @@ class GenshinWishModelV2:
             self.__dump_cache()
             logger.info("Build model in " + str(time.time() - start) + " second(s)")
 
+    def __is_cache_exist(self):
+        if os.path.exists(self.model_file_path):
+            return True
+        return False
+
     def __dump_cache(self):
         cache = {
             "chara": self.chara,
@@ -97,11 +95,11 @@ class GenshinWishModelV2:
             "chara_cache": self.chara_cache,
             "weapon_cache": self.weapon_cache
         }
-        with open(model_file_path, 'wb') as f:
+        with open(self.model_file_path, 'wb') as f:
             pickle.dump(cache, f)
 
     def __load_cache(self):
-        with open(model_file_path, 'rb') as f:
+        with open(self.model_file_path, 'rb') as f:
             cache = pickle.load(f)
             self.chara = cache["chara"]
             self.weapon = cache["weapon"]

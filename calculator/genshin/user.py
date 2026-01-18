@@ -618,7 +618,7 @@ def show_graph():
 
     # Set state
     user.set_state(
-        0,
+        50,
         consts.GenshinCharaPityType.CHARA_50,
         0,
         consts.GenshinWeaponPityType.WEAPON_50_PATH_0,
