@@ -4,7 +4,7 @@ Endfield Wish Calculator - User Module
 This module provides the EndfieldUser class for managing user state, resources,
 and wish calculations in Endfield.
 """
-
+import platform
 import sys
 import os
 import copy
@@ -327,7 +327,12 @@ def init_endfield_user(user_name: str, passcode: str) -> EndfieldUser:
 
 
 def show_graph():
-    matplotlib.use('qtagg')
+    if platform.system() == 'Darwin':
+        matplotlib.use('macosx')
+    elif platform.system() == 'Linux':
+        matplotlib.use('qtagg')
+    else:
+        matplotlib.use('TkAgg')
 
     # Initialize user
     user = EndfieldUser(1)
