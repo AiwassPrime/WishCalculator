@@ -326,11 +326,7 @@ def init_endfield_user(user_name: str, passcode: str) -> EndfieldUser:
     return EndfieldUser(hash(user_name))
 
 
-# ============================================================================
-# Main Execution
-# ============================================================================
-
-if __name__ == "__main__":
+def show_graph():
     matplotlib.use('qtagg')
 
     # Initialize user
@@ -356,7 +352,7 @@ if __name__ == "__main__":
     )
 
     # Trigger calculator
-    user.trigger_calculator(force_cpu=True, use_dense=False)
+    user.trigger_calculator(force_cpu=False, use_dense=False)
 
     # Get and process results
     raw, is_success = user.get_raw_result()
@@ -432,7 +428,6 @@ if __name__ == "__main__":
     # Drag state
     drag_state = {'is_dragging': False}
 
-
     def on_press(event):
         """Handle mouse press event."""
         if event.inaxes != ax:
@@ -441,7 +436,6 @@ if __name__ == "__main__":
         tolerance = (x_max - x_min) * 0.02  # 2% tolerance
         if abs(event.xdata - line_x) < tolerance:
             drag_state['is_dragging'] = True
-
 
     def on_motion(event):
         """Handle mouse motion event."""
@@ -455,11 +449,9 @@ if __name__ == "__main__":
         text_label.set_text(f'x = {int(x_pos)}')
         plt.draw()
 
-
     def on_release(event):
         """Handle mouse release event."""
         drag_state['is_dragging'] = False
-
 
     # Connect events
     fig = plt.gcf()
@@ -468,3 +460,10 @@ if __name__ == "__main__":
     fig.canvas.mpl_connect('button_release_event', on_release)
 
     plt.show()
+
+# ============================================================================
+# Main Execution
+# ============================================================================
+
+if __name__ == "__main__":
+    show_graph()

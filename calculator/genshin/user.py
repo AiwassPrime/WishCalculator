@@ -633,7 +633,7 @@ if __name__ == "__main__":
     )
 
     # Trigger calculator
-    user.trigger_calculator(force_cpu=True)
+    user.trigger_calculator(force_cpu=False)
 
     # Get and process results
     raw, is_success = user.get_raw_result()

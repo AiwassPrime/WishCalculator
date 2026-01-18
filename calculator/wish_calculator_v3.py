@@ -87,6 +87,8 @@ class WishCalculatorV3:
 
     def __save_cache(self):
         save = {"index": self.adjacency_matrix_index, "matrix": self.adjacency_matrix, "result": self.result}
+        if len(self.adjacency_matrix_index) > 10000:
+            return
         with open(self.model_file_path, 'wb') as f:
             pickle.dump(save, f)
 
@@ -127,7 +129,9 @@ class WishCalculatorV3:
 
         try:
             import cupy as cp
+            import cupyx.scipy.sparse as cpsp
             has_gpu = cp.cuda.runtime.getDeviceCount() > 0
+            cp.cuda.set_pinned_memory_allocator(None)
         except (ImportError, Exception):
             force_cpu = True
             has_gpu = False
@@ -184,16 +188,21 @@ class WishCalculatorV3:
                     result[:, step] = target_arrays
             else:
                 # Sparse matrix multiplication (default)
-                inter_matrix = cp.sparse.csr_matrix(cp.asarray(self.adjacency_matrix))
-                first_matrix = copy.deepcopy(inter_matrix)
+
+                n = len(self.adjacency_matrix_index)
+                result = cp.zeros((n, max_steps), dtype=cp.float32)
+
+                cpu_csr = sp.csr_matrix(self.adjacency_matrix, dtype=np.float32)
+
+                P = cpsp.csr_matrix(cpu_csr)
+
+                v = cp.zeros(n, dtype=cp.float32)
+                v[target_index] = 1.0
+
                 for step in range(max_steps):
-                    logger.debug("Step " + str(step))
-                    if step == 0:
-                        target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
-                    else:
-                        inter_matrix = first_matrix.dot(inter_matrix)
-                        target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
-                    result[:, step] = target_arrays
+                    logger.debug(f"Step {step}")
+                    v = P @ v
+                    result[:, step] = v
             
             result = cp.asnumpy(result)
 

@@ -11,8 +11,6 @@ from calculator.endfield import consts
 
 model_file_path = os.path.join(ROOT_DIR, 'models/endfield_chara.pkl')
 
-MAX_PULL = 1200
-
 class EndfieldCharaWishModelState(tuple[tuple[int, int, int], list[int]]):
     def __new__(cls, state_tuple):
         if state_tuple[0][1] >= 120 and state_tuple[0][2] != 1:
@@ -129,33 +127,54 @@ class EndfieldCharaWishModel:
                 # just hit 120, must get want
                 chara_cache.setdefault(curr_process, []).append(
                     (1, (0, curr_process[1] + 1, 1), True, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
-                if curr_process[1] + 1 < MAX_PULL:
-                    bfs_queue.append((0, curr_process[1] + 1, 1))
+                bfs_queue.append((0, curr_process[1] + 1, 1))
             else:
                 if self.chara[curr_process[0] + 1] >= 1:
-                    # 1/2 chance to get want
-                    chara_cache.setdefault(curr_process, []).append(
-                        (0.5, (0, curr_process[1] + 1, 1), True, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
-                    chara_cache.setdefault(curr_process, []).append(
-                        (0.5, (0, curr_process[1] + 1, curr_process[2]), False, consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
-                    if curr_process[1] + 1 < MAX_PULL:
+                    if curr_process[1] + 1 < 240:
+                        # 1/2 chance to get want
+                        chara_cache.setdefault(curr_process, []).append(
+                            (0.5, (0, curr_process[1] + 1, 1), True, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
+                        chara_cache.setdefault(curr_process, []).append(
+                            (0.5, (0, curr_process[1] + 1, curr_process[2]), False, consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
                         bfs_queue.append((0, curr_process[1] + 1, 1))
                         bfs_queue.append((0, curr_process[1] + 1, curr_process[2]))
+                    else:
+                        # next is 240, reset to 0
+                        chara_cache.setdefault(curr_process, []).append(
+                            (0.5, (0, 0, 1), True, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
+                        chara_cache.setdefault(curr_process, []).append(
+                            (0.5, (0, 0, curr_process[2]), False, consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
+                        bfs_queue.append((0, 0, 1))
+                        bfs_queue.append((0, 0, curr_process[2]))
                 else:
-                    # 0.8% + (n - 65) * 5% chance to get 6 star, 1/2 chance to get want
-                    chara_cache.setdefault(curr_process, []).append(
-                        (self.chara[curr_process[0] + 1] * 0.5, (0, curr_process[1] + 1, 1), True,
-                         consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
-                    chara_cache.setdefault(curr_process, []).append(
-                        (self.chara[curr_process[0] + 1] * 0.5, (0, curr_process[1] + 1, curr_process[2]), False,
-                         consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
-                    chara_cache.setdefault(curr_process, []).append(
-                        (1 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, curr_process[1] + 1, curr_process[2]), False,
-                         consts.EndfieldCharaPullResultType.GET_NOTHING))  # get nothing
-                    if curr_process[1] + 1 < MAX_PULL:
+                    if curr_process[1] + 1 < 240:
+                        # 0.8% + (n - 65) * 5% chance to get 6 star, 1/2 chance to get want
+                        chara_cache.setdefault(curr_process, []).append(
+                            (self.chara[curr_process[0] + 1] * 0.5, (0, curr_process[1] + 1, 1), True,
+                             consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
+                        chara_cache.setdefault(curr_process, []).append(
+                            (self.chara[curr_process[0] + 1] * 0.5, (0, curr_process[1] + 1, curr_process[2]), False,
+                             consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
+                        chara_cache.setdefault(curr_process, []).append(
+                            (1 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, curr_process[1] + 1, curr_process[2]), False,
+                             consts.EndfieldCharaPullResultType.GET_NOTHING))  # get nothing
                         bfs_queue.append((0, curr_process[1] + 1, 1))
                         bfs_queue.append((0, curr_process[1] + 1, curr_process[2]))
                         bfs_queue.append((curr_process[0] + 1, curr_process[1] + 1, curr_process[2]))
+                    else:
+                        # next is 240, reset to 0
+                        chara_cache.setdefault(curr_process, []).append(
+                            (self.chara[curr_process[0] + 1] * 0.5, (0, 0, 1), True,
+                             consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
+                        chara_cache.setdefault(curr_process, []).append(
+                            (self.chara[curr_process[0] + 1] * 0.5, (0, 0, curr_process[2]), False,
+                             consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
+                        chara_cache.setdefault(curr_process, []).append(
+                            (1 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, 0, curr_process[2]), False,
+                             consts.EndfieldCharaPullResultType.GET_NOTHING))  # get nothing
+                        bfs_queue.append((0, 0, 1))
+                        bfs_queue.append((0, 0, curr_process[2]))
+                        bfs_queue.append((curr_process[0] + 1, 0, curr_process[2]))
         self.chara_cache = chara_cache
 
     def get_next_states(self, curr_state: EndfieldCharaWishModelState) -> list[
@@ -208,6 +227,6 @@ class EndfieldCharaWishModel:
 
 if __name__ == "__main__":
     module = EndfieldCharaWishModel(force=True)
-    state = EndfieldCharaWishModelState(((0, 0, 0), [0, 0, 0]))
-    g = module.get_goal_state(state)
-    print(len(g[2]))
+    state = EndfieldCharaWishModelState(((0, 239, 1), [0, 0, 0]))
+    g = module.get_next_states(state)
+    print(g)
