@@ -40,7 +40,8 @@ class WishCalculatorV3:
         init_state,
         model_config: ModelConfig,
         force=False,
-        force_cpu=False
+        force_cpu=False,
+        use_dense=False
     ):
         """
         初始化 WishCalculatorV3
@@ -51,6 +52,7 @@ class WishCalculatorV3:
             model_config: 模型配置对象，包含模型特定的配置
             force: 是否强制重新构建模型
             force_cpu: 是否强制使用 CPU
+            use_dense: 是否使用 dense array 乘法（默认 False，使用 sparse array）
         """
         self.model = wish_model
         self.init_state = init_state
@@ -69,13 +71,13 @@ class WishCalculatorV3:
         self.result = None
 
         if force:
-            self.__build_model(force_cpu=force_cpu)
+            self.__build_model(force_cpu=force_cpu, use_dense=use_dense)
             self.__save_cache()
         else:
             if self.__is_cache_exist():
                 self.__load_cache()
             else:
-                self.__build_model(force_cpu=force_cpu)
+                self.__build_model(force_cpu=force_cpu, use_dense=use_dense)
                 self.__save_cache()
 
     def __is_cache_exist(self):
@@ -95,7 +97,7 @@ class WishCalculatorV3:
         self.adjacency_matrix = load["matrix"]
         self.result = load["result"]
 
-    def __build_model(self, force_cpu=False):
+    def __build_model(self, force_cpu=False, use_dense=False):
         start_time = time.time()
         dfs_set = set()
         dfs_set.add(self.init_state)
@@ -108,53 +110,112 @@ class WishCalculatorV3:
                 if state[1] not in dfs_set and not state[2]:
                     dfs_set.add(state[1])
                     dfs_stack.append(state[1])
+
         self.adjacency_matrix_index = {item: index for index, item in enumerate(self.adjacency_list.keys())}
-        self.adjacency_matrix = np.zeros((len(self.adjacency_list), len(self.adjacency_list)), dtype=float)
-        for curr_state in self.adjacency_list.keys():
-            next_states = self.adjacency_list[curr_state]
-            for next_state_tuple in next_states:
-                self.adjacency_matrix[
-                    self.adjacency_matrix_index[curr_state], self.adjacency_matrix_index[next_state_tuple[1]]] = \
-                    next_state_tuple[0]
+
+        n = len(self.adjacency_list)
+
+        if use_dense:
+            self.adjacency_matrix = np.zeros((n, n), dtype=np.float32)
+            for curr_state in self.adjacency_list.keys():
+                next_states = self.adjacency_list[curr_state]
+                for next_state_tuple in next_states:
+                    self.adjacency_matrix[
+                        self.adjacency_matrix_index[curr_state], self.adjacency_matrix_index[next_state_tuple[1]]] = \
+                        next_state_tuple[0]
+        else:
+            row_indices = []
+            col_indices = []
+            data = []
+            for curr_state in self.adjacency_list.keys():
+                curr_index = self.adjacency_matrix_index[curr_state]
+                next_states = self.adjacency_list[curr_state]
+                for prob, next_states, _, _ in next_states:
+                    next_idx = self.adjacency_matrix_index[next_states]
+                    row_indices.append(curr_index)
+                    col_indices.append(next_idx)
+                    data.append(prob)
+            self.adjacency_matrix = sp.csr_matrix(
+                (data, (row_indices, col_indices)),
+                shape=(n, n),
+                dtype=np.float32
+            )
 
         # 使用配置中的 max_steps_calculator 计算最大步数
         max_steps = self.model_config.max_steps_calculator(self.init_state)
 
-        target_index = self.adjacency_matrix_index[self.init_state.get_goal_state()[-1]]
+        goal_states = self.model.get_goal_state(self.init_state)[-1]
+        target_index = [self.adjacency_matrix_index[s] for s in goal_states]
 
         try:
             import cupy as cp
-        except ImportError:
+            import cupyx.scipy.sparse as cpsp
+            has_gpu = cp.cuda.runtime.getDeviceCount() > 0
+            cp.cuda.set_pinned_memory_allocator(None)
+        except (ImportError, Exception):
             force_cpu = True
-        if force_cpu or cp.cuda.runtime.getDeviceCount() == 0:
-            logger.info("Use CPU")
+            has_gpu = False
+            cp = None
+
+        if force_cpu or not has_gpu:
+            # CPU mode
+            logger.info(f"Use CPU ({'dense' if use_dense else 'sparse'} matrix)")
             result = np.zeros((len(self.adjacency_matrix_index), max_steps), dtype=float)
-            coo_matrix = sp.coo_matrix(self.adjacency_matrix)
-            inter_matrix = None
-            first_matrix = copy.deepcopy(coo_matrix)
-            for step in range(max_steps):
-                logger.debug("Step " + str(step))
-                if inter_matrix is None:
-                    inter_matrix = coo_matrix
-                    target_arrays = inter_matrix.toarray()[:, target_index]
+
+            if use_dense:
+                # Dense matrix multiplication
+                inter_matrix = self.adjacency_matrix.copy()
+                first_matrix = self.adjacency_matrix.copy()
+                for step in range(max_steps):
+                    logger.debug("Step " + str(step))
+                    if step == 0:
+                        target_arrays = inter_matrix[:, target_index].sum(axis=1)
+                    else:
+                        inter_matrix = first_matrix @ inter_matrix
+                        target_arrays = inter_matrix[:, target_index].sum(axis=1)
                     result[:, step] = target_arrays
-                else:
-                    inter_matrix = first_matrix.dot(inter_matrix)
-                    target_arrays = inter_matrix.toarray()[:, target_index]
-                    result[:, step] = target_arrays
+            else:
+                # Sparse matrix multiplication (default)
+                P = self.adjacency_matrix
+                curr_prob = np.zeros(n, dtype=np.float32)
+                curr_prob[target_index] = 1.0
+                for step in range(max_steps):
+                    logger.debug("Step " + str(step))
+                    curr_prob = P @ curr_prob
+                    result[:, step] = curr_prob
         else:
-            logger.info("Use GPU")
+            # GPU mode
+            logger.info(f"Use GPU ({'dense' if use_dense else 'sparse'} matrix)")
             result = cp.zeros((len(self.adjacency_matrix_index), max_steps), dtype=float)
-            inter_matrix = cp.sparse.csr_matrix(cp.asarray(self.adjacency_matrix))
-            first_matrix = copy.deepcopy(inter_matrix)
-            for step in range(max_steps):
-                logger.debug("Step " + str(step))
-                if step == 0:
-                    target_arrays = inter_matrix.toarray()[:, target_index]
-                else:
-                    inter_matrix = first_matrix.dot(inter_matrix)
-                    target_arrays = inter_matrix.toarray()[:, target_index]
-                result[:, step] = target_arrays
+
+            if use_dense:
+                # Dense matrix multiplication
+                inter_matrix = cp.asarray(self.adjacency_matrix)
+                first_matrix = cp.asarray(self.adjacency_matrix)
+                for step in range(max_steps):
+                    logger.debug("Step " + str(step))
+                    if step == 0:
+                        target_arrays = inter_matrix[:, target_index].sum(axis=1)
+                    else:
+                        inter_matrix = first_matrix @ inter_matrix
+                        target_arrays = inter_matrix[:, target_index].sum(axis=1)
+                    result[:, step] = target_arrays
+            else:
+                # Sparse matrix multiplication (default)
+
+                n = len(self.adjacency_matrix_index)
+                result = cp.zeros((n, max_steps), dtype=cp.float32)
+
+                P = cpsp.csr_matrix(self.adjacency_matrix)
+
+                v = cp.zeros(n, dtype=cp.float32)
+                v[target_index] = 1.0
+
+                for step in range(max_steps):
+                    logger.debug(f"Step {step}")
+                    v = P @ v
+                    result[:, step] = v
+
             result = cp.asnumpy(result)
 
         self.result = result
@@ -179,7 +240,7 @@ class WishCalculatorV3:
 #   def endfield_max_steps_calculator(init_state):
 #       # 根据 Endfield 的规则计算最大步数
 #       return len(init_state[1]) * 240  # 示例：每个目标最多240抽
-#   
+#
 #   endfield_config = ModelConfig(
 #       model_name='endfield_chara',
 #       max_steps_calculator=endfield_max_steps_calculator
@@ -209,6 +270,35 @@ def create_genshin_v2_config() -> ModelConfig:
     
     return ModelConfig(
         model_name='genshin_v2',
+        max_steps_calculator=max_steps_calculator,
+        cache_file_name_generator=cache_file_name_generator
+    )
+
+
+def create_endfield_chara_config() -> ModelConfig:
+    """
+    创建 Endfield Chara 模型的配置
+
+    Returns:
+        ModelConfig: Endfield Chara 模型的配置对象
+    """
+
+    def max_steps_calculator(init_state):
+        """计算 Endfield Chara 模型的最大步数"""
+        max_steps = 0
+        if len(init_state[1]) <= 1:
+            return 120
+        elif len(init_state[1]) == 2:
+            return 240
+        else:
+            return 240 * (len(init_state[1]) - 1)
+
+    def cache_file_name_generator(state, model_name):
+        """生成 Endfield Chara 模型的缓存文件名"""
+        return f'{model_name}_{state.gen_base64()}.pkl'
+
+    return ModelConfig(
+        model_name='endfield_chara',
         max_steps_calculator=max_steps_calculator,
         cache_file_name_generator=cache_file_name_generator
     )

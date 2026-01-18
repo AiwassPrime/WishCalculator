@@ -8,6 +8,7 @@ and wish calculations in Genshin Impact.
 import sys
 import os
 import copy
+import platform
 from dataclasses import dataclass
 from typing import Optional, Tuple, Dict, List
 
@@ -597,12 +598,13 @@ def init_genshin_user(user_name: str, passcode: str) -> GenshinUser:
     return GenshinUser(hash(user_name))
 
 
-# ============================================================================
-# Main Execution
-# ============================================================================
-
-if __name__ == "__main__":
-    matplotlib.use('qtagg')
+def show_graph():
+    if platform.system() == 'Darwin':
+        matplotlib.use('macosx')
+    elif platform.system() == 'Linux':
+        matplotlib.use('qtagg')
+    else:
+        matplotlib.use('TkAgg')
 
     # Initialize user
     user = GenshinUser(1)
@@ -633,7 +635,7 @@ if __name__ == "__main__":
     )
 
     # Trigger calculator
-    user.trigger_calculator(force_cpu=True)
+    user.trigger_calculator(force_cpu=False)
 
     # Get and process results
     raw, is_success = user.get_raw_result()
@@ -694,7 +696,7 @@ if __name__ == "__main__":
     ax = plt.gca()
     x_min, x_max = ax.get_xlim()
     y_min, y_max = ax.get_ylim()
-    
+
     initial_x = (x_min + x_max) / 2
     vertical_line = ax.axvline(
         x=initial_x, color='red', linewidth=2,
@@ -705,10 +707,10 @@ if __name__ == "__main__":
         color='red', fontsize=12, ha='center',
         bbox=dict(boxstyle='round', facecolor='white', alpha=0.8)
     )
-    
+
     # Drag state
     drag_state = {'is_dragging': False}
-    
+
     def on_press(event):
         """Handle mouse press event."""
         if event.inaxes != ax:
@@ -717,7 +719,7 @@ if __name__ == "__main__":
         tolerance = (x_max - x_min) * 0.02  # 2% tolerance
         if abs(event.xdata - line_x) < tolerance:
             drag_state['is_dragging'] = True
-    
+
     def on_motion(event):
         """Handle mouse motion event."""
         if not drag_state['is_dragging'] or event.inaxes != ax:
@@ -729,15 +731,23 @@ if __name__ == "__main__":
         text_label.set_x(x_pos)
         text_label.set_text(f'x = {int(x_pos)}')
         plt.draw()
-    
+
     def on_release(event):
         """Handle mouse release event."""
         drag_state['is_dragging'] = False
-    
+
     # Connect events
     fig = plt.gcf()
     fig.canvas.mpl_connect('button_press_event', on_press)
     fig.canvas.mpl_connect('motion_notify_event', on_motion)
     fig.canvas.mpl_connect('button_release_event', on_release)
-    
+
     plt.show()
+
+
+# ============================================================================
+# Main Execution
+# ============================================================================
+
+if __name__ == "__main__":
+    show_graph()
