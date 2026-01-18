@@ -8,6 +8,7 @@ and wish calculations in Genshin Impact.
 import sys
 import os
 import copy
+import platform
 from dataclasses import dataclass
 from typing import Optional, Tuple, Dict, List
 
@@ -598,7 +599,12 @@ def init_genshin_user(user_name: str, passcode: str) -> GenshinUser:
 
 
 def show_graph():
-    matplotlib.use('qtagg')
+    if platform.system() == 'Darwin':
+        matplotlib.use('macosx')
+    elif platform.system() == 'Linux':
+        matplotlib.use('qtagg')
+    else:
+        matplotlib.use('TkAgg')
 
     # Initialize user
     user = GenshinUser(1)
@@ -745,4 +751,3 @@ def show_graph():
 
 if __name__ == "__main__":
     show_graph()
-    
