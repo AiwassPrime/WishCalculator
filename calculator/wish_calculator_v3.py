@@ -87,8 +87,6 @@ class WishCalculatorV3:
 
     def __save_cache(self):
         save = {"index": self.adjacency_matrix_index, "matrix": self.adjacency_matrix, "result": self.result}
-        if len(self.adjacency_matrix_index) > 10000:
-            return
         with open(self.model_file_path, 'wb') as f:
             pickle.dump(save, f)
 
@@ -112,14 +110,36 @@ class WishCalculatorV3:
                 if state[1] not in dfs_set and not state[2]:
                     dfs_set.add(state[1])
                     dfs_stack.append(state[1])
+
         self.adjacency_matrix_index = {item: index for index, item in enumerate(self.adjacency_list.keys())}
-        self.adjacency_matrix = np.zeros((len(self.adjacency_list), len(self.adjacency_list)), dtype=float)
-        for curr_state in self.adjacency_list.keys():
-            next_states = self.adjacency_list[curr_state]
-            for next_state_tuple in next_states:
-                self.adjacency_matrix[
-                    self.adjacency_matrix_index[curr_state], self.adjacency_matrix_index[next_state_tuple[1]]] = \
-                    next_state_tuple[0]
+
+        n = len(self.adjacency_list)
+
+        if use_dense:
+            self.adjacency_matrix = np.zeros((n, n), dtype=np.float32)
+            for curr_state in self.adjacency_list.keys():
+                next_states = self.adjacency_list[curr_state]
+                for next_state_tuple in next_states:
+                    self.adjacency_matrix[
+                        self.adjacency_matrix_index[curr_state], self.adjacency_matrix_index[next_state_tuple[1]]] = \
+                        next_state_tuple[0]
+        else:
+            row_indices = []
+            col_indices = []
+            data = []
+            for curr_state in self.adjacency_list.keys():
+                curr_index = self.adjacency_matrix_index[curr_state]
+                next_states = self.adjacency_list[curr_state]
+                for prob, next_states, _, _ in next_states:
+                    next_idx = self.adjacency_matrix_index[next_states]
+                    row_indices.append(curr_index)
+                    col_indices.append(next_idx)
+                    data.append(prob)
+            self.adjacency_matrix = sp.csr_matrix(
+                (data, (row_indices, col_indices)),
+                shape=(n, n),
+                dtype=np.float32
+            )
 
         # 使用配置中的 max_steps_calculator 计算最大步数
         max_steps = self.model_config.max_steps_calculator(self.init_state)
@@ -136,12 +156,12 @@ class WishCalculatorV3:
             force_cpu = True
             has_gpu = False
             cp = None
-        
+
         if force_cpu or not has_gpu:
             # CPU mode
             logger.info(f"Use CPU ({'dense' if use_dense else 'sparse'} matrix)")
             result = np.zeros((len(self.adjacency_matrix_index), max_steps), dtype=float)
-            
+
             if use_dense:
                 # Dense matrix multiplication
                 inter_matrix = self.adjacency_matrix.copy()
@@ -156,24 +176,18 @@ class WishCalculatorV3:
                     result[:, step] = target_arrays
             else:
                 # Sparse matrix multiplication (default)
-                coo_matrix = sp.coo_matrix(self.adjacency_matrix)
-                inter_matrix = None
-                first_matrix = copy.deepcopy(coo_matrix)
+                P = self.adjacency_matrix
+                curr_prob = np.zeros(n, dtype=np.float32)
+                curr_prob[target_index] = 1.0
                 for step in range(max_steps):
                     logger.debug("Step " + str(step))
-                    if inter_matrix is None:
-                        inter_matrix = coo_matrix
-                        target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
-                        result[:, step] = target_arrays
-                    else:
-                        inter_matrix = first_matrix.dot(inter_matrix)
-                        target_arrays = inter_matrix.toarray()[:, target_index].sum(axis=1)
-                        result[:, step] = target_arrays
+                    curr_prob = P @ curr_prob
+                    result[:, step] = curr_prob
         else:
             # GPU mode
             logger.info(f"Use GPU ({'dense' if use_dense else 'sparse'} matrix)")
             result = cp.zeros((len(self.adjacency_matrix_index), max_steps), dtype=float)
-            
+
             if use_dense:
                 # Dense matrix multiplication
                 inter_matrix = cp.asarray(self.adjacency_matrix)
@@ -192,9 +206,7 @@ class WishCalculatorV3:
                 n = len(self.adjacency_matrix_index)
                 result = cp.zeros((n, max_steps), dtype=cp.float32)
 
-                cpu_csr = sp.csr_matrix(self.adjacency_matrix, dtype=np.float32)
-
-                P = cpsp.csr_matrix(cpu_csr)
+                P = cpsp.csr_matrix(self.adjacency_matrix)
 
                 v = cp.zeros(n, dtype=cp.float32)
                 v[target_index] = 1.0
@@ -203,7 +215,7 @@ class WishCalculatorV3:
                     logger.debug(f"Step {step}")
                     v = P @ v
                     result[:, step] = v
-            
+
             result = cp.asnumpy(result)
 
         self.result = result
@@ -279,7 +291,7 @@ def create_endfield_chara_config() -> ModelConfig:
         elif len(init_state[1]) == 2:
             return 240
         else:
-            return 240 * len(init_state[1]) - 1
+            return 240 * (len(init_state[1]) - 1)
 
     def cache_file_name_generator(state, model_name):
         """生成 Endfield Chara 模型的缓存文件名"""
