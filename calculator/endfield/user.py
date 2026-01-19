@@ -345,12 +345,8 @@ def show_graph():
     user.set_state(
         0,
         60,
-        False,
+        True,
         [
-            consts.EndfieldBannerType.CHARA,
-            consts.EndfieldBannerType.CHARA,
-            consts.EndfieldBannerType.CHARA,
-            consts.EndfieldBannerType.CHARA,
             consts.EndfieldBannerType.CHARA,
         ]
     )

@@ -286,12 +286,15 @@ def create_endfield_chara_config() -> ModelConfig:
     def max_steps_calculator(init_state):
         """计算 Endfield Chara 模型的最大步数"""
         max_steps = 0
-        if len(init_state[1]) <= 1:
-            return 120
-        elif len(init_state[1]) == 2:
-            return 240
+        if init_state[0][2] == 0:
+            if len(init_state[1]) <= 1:
+                return 120
+            elif len(init_state[1]) == 2:
+                return 240
+            else:
+                return 240 * (len(init_state[1]) - 1)
         else:
-            return 240 * (len(init_state[1]) - 1)
+            return 240 * len(init_state[1])
 
     def cache_file_name_generator(state, model_name):
         """生成 Endfield Chara 模型的缓存文件名"""
