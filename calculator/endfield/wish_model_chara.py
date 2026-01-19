@@ -136,70 +136,46 @@ class EndfieldCharaWishModel:
             else:
                 if self.chara[curr_process[0] + 1] >= 1:
                     if curr_process[1] + 1 < 240:
-                        if curr_process[2] != 0 and curr_process[1] == 0:
-                            # 1/2 chance to get want
-                            chara_cache.setdefault(curr_process, []).append(
-                                (0.5, (0, curr_process[1] + 1, 1), 2, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want, also get one more
-                            chara_cache.setdefault(curr_process, []).append(
-                                (0.5, (0, curr_process[1] + 1, curr_process[2]), 1, consts.EndfieldCharaPullResultType.GET_PITY))  # get pity, also get one more
-                            bfs_queue.append((0, curr_process[1] + 1, 1))
-                            bfs_queue.append((0, curr_process[1] + 1, curr_process[2]))
-                        else:
-                            # 1/2 chance to get want
-                            chara_cache.setdefault(curr_process, []).append(
-                                (0.5, (0, curr_process[1] + 1, 1), 1, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
-                            chara_cache.setdefault(curr_process, []).append(
-                                (0.5, (0, curr_process[1] + 1, curr_process[2]), 0, consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
-                            bfs_queue.append((0, curr_process[1] + 1, 1))
-                            bfs_queue.append((0, curr_process[1] + 1, curr_process[2]))
+                        # 1/2 chance to get want
+                        chara_cache.setdefault(curr_process, []).append(
+                            (0.5, (0, curr_process[1] + 1, 1), 1, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
+                        chara_cache.setdefault(curr_process, []).append(
+                            (0.5, (0, curr_process[1] + 1, curr_process[2]), 0, consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
+                        bfs_queue.append((0, curr_process[1] + 1, 1))
+                        bfs_queue.append((0, curr_process[1] + 1, curr_process[2]))
                     else:
-                        # next is 240, reset to 0
+                        # next is 240, reset to 0, get extra 1 chara
                         chara_cache.setdefault(curr_process, []).append(
-                            (0.5, (0, 0, 1), 1, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
+                            (0.5, (0, 0, 1), 2, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
                         chara_cache.setdefault(curr_process, []).append(
-                            (0.5, (0, 0, curr_process[2]), 0, consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
+                            (0.5, (0, 0, curr_process[2]), 1, consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
                         bfs_queue.append((0, 0, 1))
                         bfs_queue.append((0, 0, curr_process[2]))
                 else:
                     if curr_process[1] + 1 < 240:
-                        if curr_process[2] != 0 and curr_process[1] == 0:
-                            # 0.8% + (n - 65) * 5% chance to get 6 star, 1/2 chance to get want
-                            chara_cache.setdefault(curr_process, []).append(
-                                (self.chara[curr_process[0] + 1] * 0.5, (0, curr_process[1] + 1, 1), 2,
-                                 consts.EndfieldCharaPullResultType.GET_TARGET))  # get want, also get one more
-                            chara_cache.setdefault(curr_process, []).append(
-                                (self.chara[curr_process[0] + 1] * 0.5, (0, curr_process[1] + 1, curr_process[2]), 1,
-                                 consts.EndfieldCharaPullResultType.GET_PITY))  # get pity, also get one more
-                            chara_cache.setdefault(curr_process, []).append(
-                                (1 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, curr_process[1] + 1, curr_process[2]), 1,
-                                 consts.EndfieldCharaPullResultType.GET_NOTHING))  # get nothing, also get one more
-                            bfs_queue.append((0, curr_process[1] + 1, 1))
-                            bfs_queue.append((0, curr_process[1] + 1, curr_process[2]))
-                            bfs_queue.append((curr_process[0] + 1, curr_process[1] + 1, curr_process[2]))
-                        else:
-                            # 0.8% + (n - 65) * 5% chance to get 6 star, 1/2 chance to get want
-                            chara_cache.setdefault(curr_process, []).append(
-                                (self.chara[curr_process[0] + 1] * 0.5, (0, curr_process[1] + 1, 1), 1,
-                                 consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
-                            chara_cache.setdefault(curr_process, []).append(
-                                (self.chara[curr_process[0] + 1] * 0.5, (0, curr_process[1] + 1, curr_process[2]), 0,
-                                 consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
-                            chara_cache.setdefault(curr_process, []).append(
-                                (1 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, curr_process[1] + 1, curr_process[2]), 0,
-                                 consts.EndfieldCharaPullResultType.GET_NOTHING))  # get nothing
-                            bfs_queue.append((0, curr_process[1] + 1, 1))
-                            bfs_queue.append((0, curr_process[1] + 1, curr_process[2]))
-                            bfs_queue.append((curr_process[0] + 1, curr_process[1] + 1, curr_process[2]))
-                    else:
-                        # next is 240, reset to 0
+                        # 0.8% + (n - 65) * 5% chance to get 6 star, 1/2 chance to get want
                         chara_cache.setdefault(curr_process, []).append(
-                            (self.chara[curr_process[0] + 1] * 0.5, (0, 0, 1), 1,
+                            (self.chara[curr_process[0] + 1] * 0.5, (0, curr_process[1] + 1, 1), 1,
                              consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
                         chara_cache.setdefault(curr_process, []).append(
-                            (self.chara[curr_process[0] + 1] * 0.5, (0, 0, curr_process[2]), 0,
+                            (self.chara[curr_process[0] + 1] * 0.5, (0, curr_process[1] + 1, curr_process[2]), 0,
                              consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
                         chara_cache.setdefault(curr_process, []).append(
-                            (1 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, 0, curr_process[2]), 0,
+                            (1 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, curr_process[1] + 1, curr_process[2]), 0,
+                             consts.EndfieldCharaPullResultType.GET_NOTHING))  # get nothing
+                        bfs_queue.append((0, curr_process[1] + 1, 1))
+                        bfs_queue.append((0, curr_process[1] + 1, curr_process[2]))
+                        bfs_queue.append((curr_process[0] + 1, curr_process[1] + 1, curr_process[2]))
+                    else:
+                        # next is 240, reset to 0, get extra 1 chara
+                        chara_cache.setdefault(curr_process, []).append(
+                            (self.chara[curr_process[0] + 1] * 0.5, (0, 0, 1), 2,
+                             consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
+                        chara_cache.setdefault(curr_process, []).append(
+                            (self.chara[curr_process[0] + 1] * 0.5, (0, 0, curr_process[2]), 1,
+                             consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
+                        chara_cache.setdefault(curr_process, []).append(
+                            (1 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, 0, curr_process[2]), 1,
                              consts.EndfieldCharaPullResultType.GET_NOTHING))  # get nothing
                         bfs_queue.append((0, 0, 1))
                         bfs_queue.append((0, 0, curr_process[2]))

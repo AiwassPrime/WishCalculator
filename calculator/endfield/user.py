@@ -344,9 +344,13 @@ def show_graph():
     # Set state
     user.set_state(
         0,
-        60,
+        0,
         True,
         [
+            consts.EndfieldBannerType.CHARA,
+            consts.EndfieldBannerType.CHARA,
+            consts.EndfieldBannerType.CHARA,
+            consts.EndfieldBannerType.CHARA,
             consts.EndfieldBannerType.CHARA,
         ]
     )
