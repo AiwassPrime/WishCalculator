@@ -67,7 +67,8 @@ class EndfieldUser:
             uid: int,
             state: Optional[model.EndfieldCharaWishModelState] = None,
             resource: Optional[EndfieldCharaResource] = None,
-            prev: Optional['EndfieldUser'] = None
+            prev: Optional['EndfieldUser'] = None,
+            have_30_extra=True
     ):
         """
         Initialize a Endfield user.
@@ -81,9 +82,10 @@ class EndfieldUser:
         self.uid = uid
         self.state = state or model.EndfieldCharaWishModelState(((0, 0, 0), [0]))
         self.resource = resource or EndfieldCharaResource(0)
-        self.model = model.EndfieldCharaWishModel(have_30_extra=False)
+        self.model = model.EndfieldCharaWishModel(have_30_extra=have_30_extra)
         self.calculator: Dict[model.EndfieldCharaWishModelState, WishCalculatorV3] = {}
         self.prev = prev
+        self.have_30_extra = have_30_extra
 
     # ========================================================================
     # Resource Management Methods
@@ -168,12 +170,13 @@ class EndfieldUser:
             pulls_after_6_star: int,
             pulls_in_banner: int,
             have_120: bool,
+            have_30: bool,
             plan: List[consts.EndfieldBannerType]
     ) -> bool:
         logger.info(f"Try to set state for user {self.uid}: {self.state}")
 
         # Build character state
-        chara_state = (pulls_after_6_star, pulls_in_banner, 0 if have_120 else 1)
+        chara_state = (pulls_after_6_star, pulls_in_banner, 0 if have_120 else 1, 0 if have_30 and self.have_30_extra else 1)
 
         # Build plan
         state_plan = []
@@ -335,7 +338,7 @@ def show_graph():
         matplotlib.use('TkAgg')
 
     # Initialize user
-    user = EndfieldUser(1)
+    user = EndfieldUser(1, have_30_extra=True)
 
     # Set resources
     user.update_resource(consts.EndfieldResourceAction.ADJUST_DUMMY, 100)
@@ -346,7 +349,9 @@ def show_graph():
         0,
         0,
         True,
+        True,
         [
+            consts.EndfieldBannerType.CHARA,
             consts.EndfieldBannerType.CHARA,
             consts.EndfieldBannerType.CHARA,
             consts.EndfieldBannerType.CHARA,

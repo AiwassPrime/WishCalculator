@@ -9,9 +9,11 @@ from loguru import logger
 from calculator.definitions import ROOT_DIR
 from calculator.endfield import consts
 
-class EndfieldCharaWishModelState(tuple[tuple[int, int, int], list[int]]):
+class EndfieldCharaWishModelState(tuple[tuple[int, int, int, int], list[int]]):
     def __new__(cls, state_tuple):
         if state_tuple[0][1] >= 120 and state_tuple[0][2] != 1:
+            raise Exception("State is invalid")
+        if state_tuple[0][1] >= 30 and state_tuple[0][3] != 1:
             raise Exception("State is invalid")
         return super().__new__(cls, state_tuple)
 
@@ -120,8 +122,12 @@ class EndfieldCharaWishModel:
         # x: 80 count
         # y: 30/120/240 count
         # z: one time bonus for 120, 1 means used, 0 means not used
-        bfs_queue = [(x, 0, 0) for x in range(80)]
-        bfs_queue.extend([(x, 0, 1) for x in range(80)])
+        # a: one time bonus for 30, 1 means used, 0 means not used
+        bfs_queue = [(x, 0, 0, 1) for x in range(80)]
+        bfs_queue.extend([(x, 0, 1, 1) for x in range(80)])
+        if self.have_30_extra:
+            bfs_queue = [(x, 0, 0, 0) for x in range(80)]
+            bfs_queue.extend([(x, 0, 1, 0) for x in range(80)])
         bfs_set = set()
         while len(bfs_queue) > 0:
             curr_process = bfs_queue.pop()
@@ -131,55 +137,78 @@ class EndfieldCharaWishModel:
             if curr_process[2] == 0 and curr_process[1] + 1 == 120:
                 # just hit 120, must get want
                 chara_cache.setdefault(curr_process, []).append(
-                    (1, (0, curr_process[1] + 1, 1), 1, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
-                bfs_queue.append((0, curr_process[1] + 1, 1))
+                    (1, (0, curr_process[1] + 1, 1, 1), 1, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
+                bfs_queue.append((0, curr_process[1] + 1, 1, 1))
+            elif self.have_30_extra and curr_process[3] == 0 and curr_process[1] + 1 == 30:
+                # just hit 30, have 10 extra
+                k0 = 0.9568695240087989
+                k1 = 0.04227134443412367
+                k2 = 0.0008488221773920419
+                k3 = 0.000010226773221590835
+                chara_cache.setdefault(curr_process, []).append(
+                    (k0, (curr_process[0] + 1, curr_process[1] + 1, 0, 1), 0, consts.EndfieldCharaPullResultType.GET_NOTHING))  # get nothing
+                chara_cache.setdefault(curr_process, []).append(
+                    (k1 * 1/11, (0, curr_process[1] + 1, 1, 1), 1, consts.EndfieldCharaPullResultType.GET_TARGET))  # get on 30, only 1
+                chara_cache.setdefault(curr_process, []).append(
+                    (k1 * 10/11, (curr_process[0] + 1, curr_process[1] + 1, 1, 1), 1, consts.EndfieldCharaPullResultType.GET_TARGET))  # not get on 30, in extra
+                chara_cache.setdefault(curr_process, []).append(
+                    (k2 * 2/11, (0, curr_process[1] + 1, 1, 1), 2, consts.EndfieldCharaPullResultType.GET_TARGET))  # get 2 on 30, one of target on 30
+                chara_cache.setdefault(curr_process, []).append(
+                    (k2 * 9/11, (curr_process[0] + 1, curr_process[1] + 1, 1, 1), 2, consts.EndfieldCharaPullResultType.GET_TARGET))  # not get on 30, 2 in extra
+                chara_cache.setdefault(curr_process, []).append(
+                    (k3 * 3/11, (0, curr_process[1] + 1, 1, 1), 3, consts.EndfieldCharaPullResultType.GET_TARGET))  # get 3 on 30, one of target on 30
+                chara_cache.setdefault(curr_process, []).append(
+                    (k3 * 8/11, (curr_process[0] + 1, curr_process[1] + 1, 1, 1), 3, consts.EndfieldCharaPullResultType.GET_TARGET))  # not get on 30, 3 in extra
+                bfs_queue.append((curr_process[0] + 1, curr_process[1] + 1, 0, 1))
+                bfs_queue.append((0, curr_process[1] + 1, 1, 1))
+                bfs_queue.append((curr_process[0] + 1, curr_process[1] + 1, 1, 1))
             else:
                 if self.chara[curr_process[0] + 1] >= 1:
                     if curr_process[1] + 1 < 240:
                         # 1/2 chance to get want
                         chara_cache.setdefault(curr_process, []).append(
-                            (0.5, (0, curr_process[1] + 1, 1), 1, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
+                            (0.5, (0, curr_process[1] + 1, 1, curr_process[3]), 1, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
                         chara_cache.setdefault(curr_process, []).append(
-                            (0.5, (0, curr_process[1] + 1, curr_process[2]), 0, consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
-                        bfs_queue.append((0, curr_process[1] + 1, 1))
-                        bfs_queue.append((0, curr_process[1] + 1, curr_process[2]))
+                            (0.5, (0, curr_process[1] + 1, curr_process[2], curr_process[3]), 0, consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
+                        bfs_queue.append((0, curr_process[1] + 1, 1, curr_process[3]))
+                        bfs_queue.append((0, curr_process[1] + 1, curr_process[2], curr_process[3]))
                     else:
                         # next is 240, reset to 0, get extra 1 chara
                         chara_cache.setdefault(curr_process, []).append(
-                            (0.5, (0, 0, 1), 2, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
+                            (0.5, (0, 0, 1, 1), 2, consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
                         chara_cache.setdefault(curr_process, []).append(
-                            (0.5, (0, 0, curr_process[2]), 1, consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
-                        bfs_queue.append((0, 0, 1))
-                        bfs_queue.append((0, 0, curr_process[2]))
+                            (0.5, (0, 0, curr_process[2], 1), 1, consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
+                        bfs_queue.append((0, 0, 1, 1))
+                        bfs_queue.append((0, 0, curr_process[2], 1))
                 else:
                     if curr_process[1] + 1 < 240:
                         # 0.8% + (n - 65) * 5% chance to get 6 star, 1/2 chance to get want
                         chara_cache.setdefault(curr_process, []).append(
-                            (self.chara[curr_process[0] + 1] * 0.5, (0, curr_process[1] + 1, 1), 1,
+                            (self.chara[curr_process[0] + 1] * 0.5, (0, curr_process[1] + 1, 1, curr_process[3]), 1,
                              consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
                         chara_cache.setdefault(curr_process, []).append(
-                            (self.chara[curr_process[0] + 1] * 0.5, (0, curr_process[1] + 1, curr_process[2]), 0,
+                            (self.chara[curr_process[0] + 1] * 0.5, (0, curr_process[1] + 1, curr_process[2], curr_process[3]), 0,
                              consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
                         chara_cache.setdefault(curr_process, []).append(
-                            (1 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, curr_process[1] + 1, curr_process[2]), 0,
+                            (1 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, curr_process[1] + 1, curr_process[2], curr_process[3]), 0,
                              consts.EndfieldCharaPullResultType.GET_NOTHING))  # get nothing
-                        bfs_queue.append((0, curr_process[1] + 1, 1))
-                        bfs_queue.append((0, curr_process[1] + 1, curr_process[2]))
-                        bfs_queue.append((curr_process[0] + 1, curr_process[1] + 1, curr_process[2]))
+                        bfs_queue.append((0, curr_process[1] + 1, 1, curr_process[3]))
+                        bfs_queue.append((0, curr_process[1] + 1, curr_process[2], curr_process[3]))
+                        bfs_queue.append((curr_process[0] + 1, curr_process[1] + 1, curr_process[2], curr_process[3]))
                     else:
                         # next is 240, reset to 0, get extra 1 chara
                         chara_cache.setdefault(curr_process, []).append(
-                            (self.chara[curr_process[0] + 1] * 0.5, (0, 0, 1), 2,
+                            (self.chara[curr_process[0] + 1] * 0.5, (0, 0, 1, 1), 2,
                              consts.EndfieldCharaPullResultType.GET_TARGET))  # get want
                         chara_cache.setdefault(curr_process, []).append(
-                            (self.chara[curr_process[0] + 1] * 0.5, (0, 0, curr_process[2]), 1,
+                            (self.chara[curr_process[0] + 1] * 0.5, (0, 0, curr_process[2], 1), 1,
                              consts.EndfieldCharaPullResultType.GET_PITY))  # get pity
                         chara_cache.setdefault(curr_process, []).append(
-                            (1 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, 0, curr_process[2]), 1,
+                            (1 - self.chara[curr_process[0] + 1], (curr_process[0] + 1, 0, curr_process[2], 1), 1,
                              consts.EndfieldCharaPullResultType.GET_NOTHING))  # get nothing
-                        bfs_queue.append((0, 0, 1))
-                        bfs_queue.append((0, 0, curr_process[2]))
-                        bfs_queue.append((curr_process[0] + 1, 0, curr_process[2]))
+                        bfs_queue.append((0, 0, 1, 1))
+                        bfs_queue.append((0, 0, curr_process[2], 1))
+                        bfs_queue.append((curr_process[0] + 1, 0, curr_process[2], 1))
         self.chara_cache = chara_cache
 
     def get_next_states(self, curr_state: EndfieldCharaWishModelState) -> list[
@@ -222,7 +251,7 @@ class EndfieldCharaWishModel:
 
 
 if __name__ == "__main__":
-    module = EndfieldCharaWishModel(force=True, have_30_extra=False)
-    state = EndfieldCharaWishModelState(((60, 1, 1), [0, 0, 0]))
+    module = EndfieldCharaWishModel(force=True, have_30_extra=True)
+    state = EndfieldCharaWishModelState(((29, 29, 0, 0), [0, 0, 0]))
     g = module.get_next_states(state)
     print(g)
